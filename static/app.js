@@ -23,6 +23,7 @@ import voiceRecorderModule from './js/voiceRecorder.js';
 import censorModule from './js/censor.js';
 import galleryModule from './js/gallery.js';
 import tasksModule from './js/tasks.js?v=20260630tasksactivity';
+import harnessModule from './js/harness.js';
 import calendarModule from './js/calendar.js';
 import notesModule from './js/notes.js';
 import adminModule from './js/admin.js';
@@ -100,6 +101,7 @@ function initRailHoverLabels() {
     'rail-research': 'Research',
     'rail-email': 'Email',
     'rail-gallery': 'Gallery',
+    'rail-harness': 'Harness',
     'rail-archive': 'Library',
     'rail-memory': 'Brain',
     'rail-notes': 'Notes',
@@ -953,6 +955,16 @@ function initializeEventListeners() {
     toolTasksBtn.addEventListener('click', () => {
       if (tasksModule) {
         tasksModule.isTasksOpen() ? tasksModule.closeTasks() : tasksModule.openTasks();
+      }
+    });
+  }
+
+  // Harness (data_rein dashboard) — rail-only, no sidebar counterpart.
+  const railHarnessBtn = el('rail-harness');
+  if (railHarnessBtn) {
+    railHarnessBtn.addEventListener('click', () => {
+      if (harnessModule) {
+        harnessModule.isHarnessOpen() ? harnessModule.closeHarness() : harnessModule.openHarness();
       }
     });
   }

@@ -454,6 +454,92 @@
     </div>
   </div>
 
+  <!-- Harness Modal (data_rein dashboard: task trail, agent budgets, wiki search, omnigent) -->
+  <div id="harness-modal" class="modal hidden">
+    <div class="modal-content" role="dialog" aria-label="Harness" style="width: 720px; max-width: 92vw;">
+      <div class="modal-header">
+        <h4><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>Harness</h4>
+        <button class="close-btn" id="close-harness-modal" aria-label="Close harness modal">✖</button>
+      </div>
+      <div class="modal-body" style="display:flex;flex-direction:column;gap:12px;max-height:70vh;overflow-y:auto;">
+        <div class="memory-tabs">
+          <button class="memory-tab active" data-harness-tab="trail">Task Trail</button>
+          <button class="memory-tab" data-harness-tab="agents">Agents &amp; Budgets</button>
+          <button class="memory-tab" data-harness-tab="wiki">Wiki Search</button>
+          <button class="memory-tab" data-harness-tab="omnigent">Omnigent</button>
+          <button class="memory-tab" data-harness-tab="hardware">Hardware</button>
+          <button class="memory-tab" data-harness-tab="training">Data &amp; Training</button>
+        </div>
+
+        <div class="harness-tab-panel" data-harness-panel="trail">
+          <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
+            <button id="harness-trail-refresh" class="memory-toolbar-btn">Refresh</button>
+          </div>
+          <table id="harness-trail-table" style="width:100%;border-collapse:collapse;font-size:12px;">
+            <thead><tr style="text-align:left;opacity:0.7;">
+              <th style="padding:4px;">Status</th><th style="padding:4px;">Type</th>
+              <th style="padding:4px;">Node</th><th style="padding:4px;">Prompt</th>
+            </tr></thead>
+            <tbody id="harness-trail-body"></tbody>
+          </table>
+        </div>
+
+        <div class="harness-tab-panel hidden" data-harness-panel="agents">
+          <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
+            <button id="harness-agents-refresh" class="memory-toolbar-btn">Refresh</button>
+          </div>
+          <div id="harness-agents-list" style="display:flex;flex-direction:column;gap:10px;"></div>
+        </div>
+
+        <div class="harness-tab-panel hidden" data-harness-panel="wiki">
+          <input type="text" id="harness-wiki-search-input" placeholder="Search the wiki…"
+                 class="memory-search-input" style="width:100%;margin-bottom:8px;" />
+          <div id="harness-wiki-results" style="display:flex;flex-direction:column;gap:8px;font-size:12px;"></div>
+        </div>
+
+        <div class="harness-tab-panel hidden" data-harness-panel="omnigent">
+          <div id="harness-omnigent-status" style="margin-bottom:8px;opacity:0.7;font-size:12px;">Checking…</div>
+          <iframe id="harness-omnigent-frame" style="width:100%;height:50vh;border:1px solid var(--border);border-radius:6px;display:none;"></iframe>
+        </div>
+
+        <div class="harness-tab-panel hidden" data-harness-panel="hardware">
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+            <h5 style="margin:0;">Cluster Profile</h5>
+            <button id="harness-hardware-refresh" class="memory-toolbar-btn">Scan</button>
+          </div>
+          <div id="harness-hardware-status" style="margin-bottom:8px;opacity:0.8;font-size:12px;white-space:pre-wrap;"></div>
+          <div id="harness-hardware-gaps" style="font-size:12px;color:var(--red);white-space:pre-wrap;"></div>
+          <hr style="border-color:var(--border);opacity:0.3;margin:8px 0;">
+          <h5 style="margin:0 0 8px 0;">Coordinator</h5>
+          <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <input type="text" id="harness-coord-model" placeholder="Model name..." class="memory-search-input" style="flex:1;" />
+            <button id="harness-coord-load" class="memory-toolbar-btn">Load</button>
+            <button id="harness-coord-unload" class="memory-toolbar-btn">Unload</button>
+          </div>
+          <div id="harness-coord-status" style="font-size:12px;opacity:0.8;white-space:pre-wrap;"></div>
+        </div>
+
+        <div class="harness-tab-panel hidden" data-harness-panel="training">
+          <h5 style="margin:0 0 8px 0;">Dataset Export</h5>
+          <div style="display:flex;flex-direction:column;gap:6px;font-size:12px;">
+            <input type="text" id="harness-ds-path" placeholder="Output Path (/tmp/dataset.jsonl)" class="memory-search-input" />
+            <input type="text" id="harness-ds-cats" placeholder="Categories (comma separated)" class="memory-search-input" />
+            <button id="harness-ds-export" class="memory-toolbar-btn" style="align-self:flex-start;">Export Dataset</button>
+            <div id="harness-ds-status" style="opacity:0.7;margin-top:4px;"></div>
+          </div>
+          <hr style="border-color:var(--border);opacity:0.3;margin:12px 0;">
+          <h5 style="margin:0 0 8px 0;">Training</h5>
+          <button id="harness-train-refresh" class="memory-toolbar-btn" style="margin-bottom:8px;">Check QLoRA Capability</button>
+          <div id="harness-train-status" style="font-size:12px;opacity:0.8;white-space:pre-wrap;"></div>
+        </div>
+
+        <div style="border-top:1px solid var(--border);padding-top:8px;font-size:12px;opacity:0.7;" id="harness-tokens-strip">
+          Token usage: —
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Theme Popup (floating panel) -->
   <div id="theme-modal" class="modal hidden">
   <div id="theme-popup" class="modal-content admin-modal-content" role="dialog" aria-label="Theme" style="background:var(--bg)">
@@ -691,6 +777,7 @@
     <button class="icon-rail-btn" id="rail-research" title="Deep Research"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg></button>
     <button class="icon-rail-btn" id="rail-email" title="Email"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></button>
     <button class="icon-rail-btn" id="rail-gallery" title="Gallery"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></button>
+    <button class="icon-rail-btn" id="rail-harness" title="Harness"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></button>
     <button class="icon-rail-btn" id="rail-archive" title="Library"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M9 7h6M9 11h4"/></svg></button>
     <button class="icon-rail-btn" id="rail-memory" title="Brain"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/></svg></button>
     <button class="icon-rail-btn" id="rail-notes" title="Notes"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h10l4 4v14H5z"/><path d="M15 3v5h5"/><path d="M8 17.5 15.5 10l2.5 2.5L10.5 20H8z"/></svg></button>
@@ -2507,7 +2594,7 @@
 <script src="/static/js/cookbookSchedule.js"></script>
 <script type="module" src="/static/js/search-chat.js"></script>
 <script type="module" src="/static/js/compare/index.js"></script>
-<script type="module" src="/static/js/theme.js"></script>
+<script type="module" src="/static/js/theme.js?v=2"></script>
 <script type="module" src="/static/js/censor.js"></script>
 <script type="module" src="/static/js/settings.js"></script>
 <script type="module" src="/static/js/admin.js"></script>

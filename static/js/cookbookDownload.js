@@ -76,6 +76,13 @@ function _ggufDownloadSource(model, backend) {
     const repo = model?.quant_repo || model?.repo_id || model?.name;
     if (repo) return { repo };
   }
+
+  // Fallback: If no explicit GGUF source is mapped, assume a common community quantizer.
+  // This bypasses the frontend block and lets the user attempt the download.
+  const shortName = (model?.name || '').split('/').pop();
+  if (shortName) {
+    return { repo: `mradermacher/${shortName}-GGUF` };
+  }
   return null;
 }
 

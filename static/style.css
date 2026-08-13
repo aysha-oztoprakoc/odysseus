@@ -16,12 +16,14 @@
  */
 
 :root {
-  /* Core palette */
-  --bg: #282c34;
-  --fg: #9cdef2;
-  --panel: #111;
-  --border: #355a66;
-  --red: #e06c75;
+  /* Core palette (Omarchy Cyberpunk Theme — knowledge_base/AESTHETIC_DIRECTIVE.md,
+     Blood Red on Black — the harness's default first-paint appearance) */
+  --bg: #090300;
+  --fg: #ff4040;
+  --panel: rgba(32, 0, 0, 0.85); /* Transparent Deep Red for Glassmorphism */
+  --border: #ff1100;
+  --red: #ff1100;
+  --accent: #26bdfd;
   /* Were `var(--green)` / `var(--warn)` — self-referential, so they
      resolved to invalid and every site fell back to its own literal
      (or, for sites with no fallback, painted as transparent/inherit).
@@ -96,6 +98,10 @@
 html, body { overflow-x: hidden; height: 100%; margin: 0; overscroll-behavior: none; }
 body {
   background-color: var(--bg);
+  background-image: url('/static/img/cyberpunk_bg.png');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
   color: var(--fg);
   /* Keep the base padding transition for older layout paths that still adjust
      the body directly. Edge docks reserve workspace room on the flex panes
@@ -10511,6 +10517,7 @@ details a:hover {
   min-height: 0;
 }
 .memory-tab-panel.hidden { display: none; }
+.harness-tab-panel.hidden { display: none; }
 /* Browse: bounded flex column so #memory-list gets remaining height (not 0px).
    height:min(78vh,max-content) gives a definite cap when long, natural height
    when short. flex-basis:auto (not 0) on the list avoids collapse in auto-sized

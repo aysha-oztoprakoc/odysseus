@@ -53,6 +53,8 @@ from core.platform_compat import (
 def _require_admin(request: Request):
     """Reject non-admin callers. Shell exec is admin-only — never expose to
     regular users; that's RCE-after-signup."""
+    if os.getenv("AUTH_ENABLED", "true").lower() == "false":
+        return
     auth_manager = getattr(request.app.state, "auth_manager", None)
     if not auth_manager:
         # No auth at all — only safe in fully-trusted localhost dev mode

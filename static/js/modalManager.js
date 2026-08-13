@@ -131,6 +131,7 @@ const _LABELS = {
   'calendar-modal':    { label: 'Calendar',  icon: 'M3 4h18v18H3zM16 2v4M8 2v4M3 10h18' },
   'gallery-modal':     { label: 'Gallery',   icon: 'M3 3h18v18H3zM8.5 8.5l3 3M21 15l-5-5L5 21' },
   'tasks-modal':       { label: 'Tasks',     icon: 'M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11' },
+  'harness-modal':     { label: 'Harness',   icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>' },
   'doclib-modal':      { label: 'Library',   icon: 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2zM9 7h6M9 11h4' },
   // Full SVG markup (not a single path-d) — the rounded-lobe brain needs
   // three sub-paths, which the dock renderer supports when the icon string
@@ -1406,6 +1407,7 @@ const _AUTO_WIRE = {
   'calendar-modal':       { rail: 'rail-calendar',  sidebar: 'tool-calendar-btn' },
   'gallery-modal':        { rail: 'rail-gallery',   sidebar: 'tool-gallery-btn' },
   'tasks-modal':          { rail: 'rail-tasks',     sidebar: 'tool-tasks-btn' },
+  'harness-modal':        { rail: 'rail-harness',   sidebar: null },
   'doclib-modal':         { rail: 'rail-archive',   sidebar: 'tool-library-btn' },
   'memory-modal':         { rail: null,             sidebar: 'tool-memory-btn' },
   'notes-panel':          { rail: 'rail-notes',     sidebar: 'tool-notes-btn' },
