@@ -225,6 +225,7 @@
   <link rel="modulepreload" href="/static/js/ui.js">
   <link rel="modulepreload" href="/static/js/sessions.js">
   <link rel="modulepreload" href="/static/js/markdown.js">
+  <link rel="modulepreload" href="/static/js/filesExplorer.js">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content, viewport-fit=cover" />
 </head>
 <body>
@@ -246,6 +247,39 @@
     setTimeout(function(){var l=document.getElementById('app-loader');if(l){l.style.opacity='0';setTimeout(function(){l.remove()},300)}},5000);
   })();
   </script>
+
+  <!-- Files Explorer Modal -->
+  <div id="files-modal" class="modal hidden">
+    <div class="modal-content" role="dialog" aria-label="Files Explorer" style="width: 800px; max-width: 95vw; height: 80vh; display: flex; flex-direction: column;">
+      <div class="modal-header">
+        <h4><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>Files Explorer</h4>
+        <button class="close-btn" id="close-files-modal" aria-label="Close files modal">✖</button>
+      </div>
+      <div class="modal-body" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 0;">
+        <div style="display: flex; gap: 8px; padding: 8px; border-bottom: 1px solid var(--border);">
+          <button id="files-up-btn" class="memory-toolbar-btn">⬆ Up</button>
+          <input type="text" id="files-path-input" class="memory-search-input" style="flex: 1;" placeholder="Path..." value="/home/amdy" />
+          <button id="files-go-btn" class="memory-toolbar-btn">Go</button>
+          <button id="files-upload-btn" class="memory-toolbar-btn" style="margin-left:8px;">Upload</button>
+          <input type="file" id="files-upload-input" style="display:none;" />
+        </div>
+        <div style="flex: 1; overflow-y: auto; padding: 8px;" id="files-list">
+          <div style="opacity: 0.5; text-align: center; margin-top: 20px;">Loading...</div>
+        </div>
+        <div id="files-editor-container" style="display:none; flex: 1; flex-direction: column; border-top: 1px solid var(--border);">
+          <div style="display:flex; justify-content:space-between; padding: 4px 8px; background: var(--bg-secondary);">
+            <span id="files-editor-name" style="font-weight: bold; font-size: 12px; margin-top:4px;"></span>
+            <div>
+              <button id="files-editor-save" class="memory-toolbar-btn confirm-btn-primary">Save</button>
+              <button id="files-editor-close" class="memory-toolbar-btn">Close Editor</button>
+            </div>
+          </div>
+          <textarea id="files-editor-textarea" style="flex: 1; width: 100%; resize: none; background: var(--input-bg); color: var(--fg); border: none; padding: 8px; font-family: monospace; outline: none;"></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Memory Management Modal -->
   <div id="memory-modal" class="modal hidden">
     <div class="modal-content memory-modal-content" role="dialog" aria-label="Brain" style="background:var(--bg)">
@@ -469,6 +503,7 @@
           <button class="memory-tab" data-harness-tab="omnigent">Omnigent</button>
           <button class="memory-tab" data-harness-tab="hardware">Hardware</button>
           <button class="memory-tab" data-harness-tab="training">Data &amp; Training</button>
+          <button class="memory-tab" data-harness-tab="system">System &amp; Ops</button>
         </div>
 
         <div class="harness-tab-panel" data-harness-panel="trail">
@@ -531,6 +566,28 @@
           <h5 style="margin:0 0 8px 0;">Training</h5>
           <button id="harness-train-refresh" class="memory-toolbar-btn" style="margin-bottom:8px;">Check QLoRA Capability</button>
           <div id="harness-train-status" style="font-size:12px;opacity:0.8;white-space:pre-wrap;"></div>
+        </div>
+
+        <div class="harness-tab-panel hidden" data-harness-panel="system">
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+            <h5 style="margin:0;">Prime Directive</h5>
+            <button id="harness-sys-directive-refresh" class="memory-toolbar-btn">Reload</button>
+          </div>
+          <pre id="harness-sys-directive" style="font-size:11px;opacity:0.8;max-height:150px;overflow-y:auto;background:var(--bg-secondary);padding:6px;border-radius:4px;white-space:pre-wrap;"></pre>
+          <hr style="border-color:var(--border);opacity:0.3;margin:12px 0;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+            <h5 style="margin:0;">Paths &amp; Aliases</h5>
+            <button id="harness-sys-paths-refresh" class="memory-toolbar-btn">Reload Paths</button>
+          </div>
+          <pre id="harness-sys-paths" style="font-size:11px;opacity:0.8;background:var(--bg-secondary);padding:6px;border-radius:4px;white-space:pre-wrap;"></pre>
+          <hr style="border-color:var(--border);opacity:0.3;margin:12px 0;">
+          <h5 style="margin:0 0 8px 0;">Secrets Vault</h5>
+          <div style="display:flex;gap:6px;font-size:12px;">
+            <input type="text" id="harness-sys-secret-name" placeholder="Secret name" class="memory-search-input" />
+            <input type="password" id="harness-sys-secret-pwd" placeholder="Vault Password" class="memory-search-input" />
+            <button id="harness-sys-secret-btn" class="memory-toolbar-btn">Reveal</button>
+          </div>
+          <div id="harness-sys-secret-val" style="font-size:12px;opacity:0.8;margin-top:4px;"></div>
         </div>
 
         <div style="border-top:1px solid var(--border);padding-top:8px;font-size:12px;opacity:0.7;" id="harness-tokens-strip">
@@ -777,6 +834,7 @@
     <button class="icon-rail-btn" id="rail-research" title="Deep Research"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg></button>
     <button class="icon-rail-btn" id="rail-email" title="Email"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></button>
     <button class="icon-rail-btn" id="rail-gallery" title="Gallery"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></button>
+    <button class="icon-rail-btn" id="rail-files" title="Files Explorer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg></button>
     <button class="icon-rail-btn" id="rail-harness" title="Harness"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></button>
     <button class="icon-rail-btn" id="rail-archive" title="Library"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M9 7h6M9 11h4"/></svg></button>
     <button class="icon-rail-btn" id="rail-memory" title="Brain"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/></svg></button>
@@ -972,6 +1030,17 @@
             <path d="M21 15l-5-5L5 21"/>
           </svg>
           <span class="grow">Gallery</span>
+        </div>
+        <div class="list-item" id="tool-files-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+            style="flex-shrink:0;opacity:0.5;">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="12" y1="18" x2="12" y2="12"/>
+            <line x1="9" y1="15" x2="15" y2="15"/>
+          </svg>
+          <span class="grow">Files</span>
         </div>
         <div class="list-item" id="tool-library-btn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;opacity:0.5;">

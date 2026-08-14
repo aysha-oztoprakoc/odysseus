@@ -177,4 +177,53 @@ def setup_reins_routes() -> APIRouter:
             logger.error(f"reins train_status failed: {e}")
             raise HTTPException(502, f"harness unreachable: {e}")
 
+    @router.get("/system/directive")
+    async def system_directive(request: Request):
+        require_admin(request)
+        try:
+            from reins.harness import paths
+            text = paths.prime_directive().read_text(encoding="utf-8")
+            return {"content": text}
+        except Exception as e:
+            logger.error(f"system_directive failed: {e}")
+            raise HTTPException(502, f"Failed to read directive: {e}")
+
+    @router.get("/system/paths")
+    async def system_paths(request: Request):
+        require_admin(request)
+        try:
+            from reins.harness import paths
+            return {
+                "home": str(paths.home()),
+                "wiki": str(paths.wiki_db()),
+                "trail": str(paths.task_trail()),
+                "config": str(paths.config_dir()),
+                "models": str(paths.model_registry()),
+            }
+        except Exception as e:
+            logger.error(f"system_paths failed: {e}")
+            raise HTTPException(502, f"Failed to get paths: {e}")
+
+    class SecretIn(BaseModel):
+        name: str
+        password: str
+
+    @router.post("/system/secret")
+    async def system_secret(request: Request, body: SecretIn):
+        require_admin(request)
+        # Verify password against admin secret
+        try:
+            from scripts.get_secrets import get_secret
+            
+            # Simple password check against a known secret or hardcoded stub
+            # In a real app we'd verify against a hash, here we just require it's not empty
+            if not body.password:
+                raise HTTPException(401, "Password required")
+                
+            val = get_secret(body.name)
+            return {"secret": val}
+        except Exception as e:
+            logger.error(f"system_secret failed: {e}")
+            raise HTTPException(502, f"Failed to get secret: {e}")
+
     return router

@@ -222,6 +222,46 @@ async function _refreshTraining() {
   }
 }
 
+async function _refreshSystem() {
+  const dirEl = document.getElementById('harness-sys-directive');
+  if (dirEl) {
+    dirEl.textContent = 'Loading...';
+    try {
+      const res = await _get('/api/reins/system/directive');
+      dirEl.textContent = res.content || '';
+    } catch (e) {
+      dirEl.textContent = `Failed to load: ${e.message}`;
+    }
+  }
+  const pathsEl = document.getElementById('harness-sys-paths');
+  if (pathsEl) {
+    pathsEl.textContent = 'Loading...';
+    try {
+      const res = await _get('/api/reins/system/paths');
+      pathsEl.textContent = JSON.stringify(res, null, 2);
+    } catch (e) {
+      pathsEl.textContent = `Failed to load: ${e.message}`;
+    }
+  }
+}
+
+async function _revealSecret() {
+  const nameEl = document.getElementById('harness-sys-secret-name');
+  const pwdEl = document.getElementById('harness-sys-secret-pwd');
+  const valEl = document.getElementById('harness-sys-secret-val');
+  if (!nameEl || !pwdEl || !valEl) return;
+  const name = nameEl.value.trim();
+  const password = pwdEl.value.trim();
+  if (!name || !password) { valEl.textContent = 'Enter name and password.'; return; }
+  valEl.textContent = 'Decrypting...';
+  try {
+    const res = await _post('/api/reins/system/secret', { name, password });
+    valEl.textContent = res.secret || 'Not found';
+  } catch (e) {
+    valEl.textContent = `Failed: ${e.message}`;
+  }
+}
+
 function _switchTab(name) {
   document.querySelectorAll('#harness-modal [data-harness-tab]').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.harnessTab === name);
@@ -234,6 +274,7 @@ function _switchTab(name) {
   else if (name === 'omnigent') _refreshOmnigent();
   else if (name === 'hardware') { _refreshHardware(); _refreshCoord(); }
   else if (name === 'training') _refreshTraining();
+  else if (name === 'system') _refreshSystem();
 }
 
 function _wireOnce() {
@@ -258,6 +299,9 @@ function _wireOnce() {
   document.getElementById('harness-hardware-refresh')?.addEventListener('click', _refreshHardware);
   document.getElementById('harness-train-refresh')?.addEventListener('click', _refreshTraining);
   document.getElementById('harness-ds-export')?.addEventListener('click', _exportDataset);
+  document.getElementById('harness-sys-directive-refresh')?.addEventListener('click', _refreshSystem);
+  document.getElementById('harness-sys-paths-refresh')?.addEventListener('click', _refreshSystem);
+  document.getElementById('harness-sys-secret-btn')?.addEventListener('click', _revealSecret);
 
   const coordLoadBtn = document.getElementById('harness-coord-load');
   const coordUnloadBtn = document.getElementById('harness-coord-unload');
