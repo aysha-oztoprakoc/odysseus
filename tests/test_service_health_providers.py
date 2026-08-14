@@ -73,7 +73,8 @@ def test_providers_bounded_marks_slow_as_timeout(monkeypatch):
 
     def probe(base, key, timeout):
         if 'slow' in base:
-            time.sleep(10)
+            import threading
+            threading.Event().wait(10)
         return ['m1']
     eps = [{'name': 'fast', 'base_url': 'http://fast', 'api_key': 'k'}, {'name': 'slow', 'base_url': 'http://slow', 'api_key': 'k'}]
     t0 = time.monotonic()
@@ -90,7 +91,8 @@ def test_providers_bounded_with_many_slow_endpoints(monkeypatch):
     monkeypatch.setattr(sh, '_FANOUT_BUDGET', 1)
 
     def probe(base, key, timeout):
-        time.sleep(10)
+        import threading
+        threading.Event().wait(10)
         return ['m1']
     eps = [{'name': f'ep{i}', 'base_url': f'http://ep{i}', 'api_key': 'k'} for i in range(25)]
     t0 = time.monotonic()

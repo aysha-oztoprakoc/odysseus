@@ -71,7 +71,8 @@ def test_email_bounded_marks_slow_as_timeout(monkeypatch):
 
     def connect(account_id):
         if account_id == 'slow':
-            time.sleep(10)
+            import threading
+            threading.Event().wait(10)
         return _Conn()
     accts = [_acct('fast'), _acct('slow')]
     accts[1]['account_id'] = 'slow'

@@ -72,7 +72,8 @@ def test_collect_runs_subsystems_concurrently(monkeypatch):
     def slow(name):
 
         def _fn(*_a, **_k):
-            time.sleep(0.6)
+            import threading
+            threading.Event().wait(0.6)
             return {'name': name, 'status': sh.OK, 'detail': '', 'meta': {}}
         return _fn
     monkeypatch.setattr(sh, 'searxng_health', slow('searxng'))
