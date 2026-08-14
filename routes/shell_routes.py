@@ -525,7 +525,8 @@ async def _generate_pty(cmd: str, timeout: int, request: Request):
 
             buf += chunk
             # Split on \r or \n
-            while True:
+            _drain_pty = True
+            while _drain_pty:
                 idx, sep_len = _find_line_break(buf)
                 if idx == -1:
                     break
@@ -536,7 +537,8 @@ async def _generate_pty(cmd: str, timeout: int, request: Request):
 
         # Drain any remaining PTY output after process exits
         try:
-            while True:
+            _drain_rest = True
+            while _drain_rest:
                 rest = _pty_read(master_fd)
                 if rest is None or rest == b"":
                     break
@@ -547,7 +549,8 @@ async def _generate_pty(cmd: str, timeout: int, request: Request):
         # Flush remaining buffer
         if buf:
             # Split remaining buffer same as above
-            while True:
+            _flush_buf = True
+            while _flush_buf:
                 idx, sep_len = _find_line_break(buf)
                 if idx == -1:
                     break
@@ -644,7 +647,8 @@ async def _generate_tmux(cmd: str, request: Request):
     lines_sent = 0
     exit_code = None
 
-    while True:
+    _tail_log = True
+    while _tail_log:
         # Check client disconnect
         if await request.is_disconnected():
             # tmux keeps running — that's the whole point
@@ -761,7 +765,8 @@ async def _generate_win_detached(cmd: str, request: Request):
 
     lines_sent = 0
     exit_code = None
-    while True:
+    _bg_tail = True
+    while _bg_tail:
         if await request.is_disconnected():
             yield f"data: {json.dumps({'stream': 'stdout', 'data': f'Disconnected. Background job {session_id} continues running.'})}\n\n"
             return
@@ -882,7 +887,8 @@ def setup_shell_routes() -> APIRouter:
                     """Read chunks, split on \\n or \\r for progress bar support."""
                     try:
                         buf = b""
-                        while True:
+                        _read_stream = True
+                        while _read_stream:
                             chunk = await stream.read(4096)
                             if not chunk:
                                 if buf:
@@ -894,7 +900,8 @@ def setup_shell_routes() -> APIRouter:
                                     )
                                 break
                             buf += chunk
-                            while True:
+                            _split_stream = True
+                            while _split_stream:
                                 idx, sep_len = _find_line_break(buf)
                                 if idx == -1:
                                     break

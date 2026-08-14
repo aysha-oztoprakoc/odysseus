@@ -21,4 +21,21 @@ def test_pon_compliance_src():
     
     assert result.returncode == 0, f"PON Compliance Failed on {target_path}:\n{result.stdout}\n{result.stderr}"
 
-
+def test_pon_compliance_odysseus():
+    """
+    Enforces PON compliance on the Odysseus application core.
+    """
+    script_path = Path.home() / "data_rein" / ".agents" / "skills" / "pon_testing_suite" / "scripts" / "pon_tester.py"
+    target_paths = [
+        Path.home() / "data_rein" / "odysseus" / "routes",
+        Path.home() / "data_rein" / "odysseus" / "services",
+        Path.home() / "data_rein" / "odysseus" / "core"
+    ]
+    
+    for target in target_paths:
+        result = subprocess.run(
+            ["python3", str(script_path), str(target)],
+            capture_output=True,
+            text=True
+        )
+        assert result.returncode == 0, f"PON Compliance Failed on {target}:\n{result.stdout}\n{result.stderr}"

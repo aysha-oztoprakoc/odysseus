@@ -384,7 +384,7 @@ def setup_upload_routes(upload_handler):
 
     async def periodic_rate_limit_cleanup():
         """Background task to run cleanup every hour"""
-        while True:
+        while getattr(upload_handler, "running", True):
             await asyncio.sleep(3600)
             upload_handler.cleanup_rate_limits()
     

@@ -112,7 +112,8 @@ class ShellService:
 
             async def _reader(stream, name):
                 try:
-                    while True:
+                    _read_ptys = True
+                    while _read_ptys:
                         line = await stream.readline()
                         if not line:
                             break

@@ -52,10 +52,10 @@ def _unique_existing_target(path: str) -> str:
     if not os.path.exists(path):
         return path
     stem, ext = os.path.splitext(path)
-    while True:
+    candidate = path
+    while os.path.exists(candidate):
         candidate = f"{stem}-{uuid.uuid4().hex[:10]}{ext}"
-        if not os.path.exists(candidate):
-            return candidate
+    return candidate
 
 
 def _remove_empty_tree(path: str) -> None:

@@ -27,6 +27,7 @@ import harnessModule from './js/harness.js';
 import calendarModule from './js/calendar.js';
 import notesModule from './js/notes.js';
 import adminModule from './js/admin.js';
+import filesExplorerModule from './js/filesExplorer.js';
 import settingsModule from './js/settings.js';
 // Eagerly bind unified minimize/restore behavior across all tool modals.
 import './js/modalManager.js';

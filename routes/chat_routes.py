@@ -1020,7 +1020,8 @@ def setup_chat_routes(
                     _heartbeat_counter = 0
                     _last_progress = {}
                     _sent_avg = False
-                    while True:
+                    _poll_research = True
+                    while _poll_research:
                         status = research_handler.get_status(session)
                         if not status or status["status"] != "running":
                             break

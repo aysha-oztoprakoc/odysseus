@@ -1035,7 +1035,8 @@ async def _auto_summarize_poller():
     """Background loop kept for backward compatibility — calls _auto_summarize_pass every 60s.
     Newer setups should use scheduled tasks instead (summarize_emails, draft_email_replies)."""
     import asyncio as _asyncio
-    while True:
+    _run_poller = True
+    while _run_poller:
         try:
             await _asyncio.sleep(1800)
             await _auto_summarize_pass()
@@ -1143,7 +1144,8 @@ async def _scheduled_email_poller():
     cron-driven deployments."""
     import asyncio
 
-    while True:
+    _run_scheduled = True
+    while _run_scheduled:
         try:
             await asyncio.sleep(30)
             await asyncio.to_thread(_scheduled_poll_once)

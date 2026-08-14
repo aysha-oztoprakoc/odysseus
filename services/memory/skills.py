@@ -159,7 +159,7 @@ class SkillsManager:
     def _iter_skill_files(self) -> Iterable[str]:
         if not os.path.isdir(self.skills_root):
             return
-        for root, _dirs, files in os.walk(self.skills_root, followlinks=False):
+        for root, _dirs, files in os.walk(self.skills_root, followlinks=True):
             if "SKILL.md" in files:
                 yield os.path.join(root, "SKILL.md")
 

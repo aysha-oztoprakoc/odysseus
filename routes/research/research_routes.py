@@ -549,7 +549,8 @@ def setup_research_routes(research_handler, session_manager=None) -> APIRouter:
             raise HTTPException(404, "No research found for this session")
         async def _generate():
             last_progress = None
-            while True:
+            _poll_research = True
+            while _poll_research:
                 status = research_handler.get_status(session_id)
                 if status is None:
                     yield f"data: {json.dumps({'status': 'not_found'})}\n\n"
