@@ -729,7 +729,7 @@ class ResearchHandler:
                 temperature=0,
                 max_tokens=5,
                 headers=headers,
-                timeout=15,
+                timeout=60,
                 max_retries=1,
             )
             logger.info(f"Endpoint probe OK: {model}")

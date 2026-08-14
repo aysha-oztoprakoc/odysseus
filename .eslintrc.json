@@ -1,0 +1,21 @@
+{
+  "env": { "browser": true, "es2022": true },
+  "parserOptions": { "sourceType": "module" },
+  "extends": "eslint:recommended",
+  "globals": {
+    "module": "readonly",
+    "require": "readonly",
+    "process": "readonly",
+    "exports": "readonly",
+    "globalThis": "readonly"
+  },
+  "rules": {
+    "no-undef": "error",
+    "no-unused-vars": "off",
+    "no-redeclare": "off",
+    "no-empty": "off",
+    "no-inner-declarations": "off",
+    "no-func-assign": "off",
+    "no-prototype-builtins": "off"
+  }
+}

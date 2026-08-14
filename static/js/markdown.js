@@ -627,7 +627,7 @@ export function mdToHtml(src, opts) {
       try {
         const raw = math.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
         const placeholder = `___MATH_BLOCK_${mathBlocks.length}___`;
-        mathBlocks.push(katex.renderToString(raw.trim(), { displayMode: true, throwOnError: false }));
+        mathBlocks.push(window.katex.renderToString(raw.trim(), { displayMode: true, throwOnError: false }));
         return placeholder;
       } catch (e) { return match; }
     });
@@ -637,7 +637,7 @@ export function mdToHtml(src, opts) {
       try {
         const raw = math.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
         const placeholder = `___MATH_BLOCK_${mathBlocks.length}___`;
-        mathBlocks.push(katex.renderToString(raw.trim(), { displayMode: false, throwOnError: false }));
+        mathBlocks.push(window.katex.renderToString(raw.trim(), { displayMode: false, throwOnError: false }));
         return placeholder;
       } catch (e) { return match; }
     });
@@ -646,7 +646,7 @@ export function mdToHtml(src, opts) {
       try {
         const raw = math.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
         const placeholder = `___MATH_BLOCK_${mathBlocks.length}___`;
-        mathBlocks.push(katex.renderToString(raw.trim(), { displayMode: true, throwOnError: false }));
+        mathBlocks.push(window.katex.renderToString(raw.trim(), { displayMode: true, throwOnError: false }));
         return placeholder;
       } catch (e) { return match; }
     });
@@ -655,7 +655,7 @@ export function mdToHtml(src, opts) {
       try {
         const raw = math.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
         const placeholder = `___MATH_BLOCK_${mathBlocks.length}___`;
-        mathBlocks.push(katex.renderToString(raw.trim(), { displayMode: false, throwOnError: false }));
+        mathBlocks.push(window.katex.renderToString(raw.trim(), { displayMode: false, throwOnError: false }));
         return placeholder;
       } catch (e) { return match; }
     });

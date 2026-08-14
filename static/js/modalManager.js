@@ -799,7 +799,7 @@ function _wireChipDrag(chip, dock) {
     // window + snapping it there (top → maximize/fullscreen, right → right
     // dock). Releasing in the zone commits it (see onPointerUp).
     if (e.pointerType !== 'touch' && window.innerWidth > 768) {
-      const z = previewZoneAt(e.clientX, e.clientY, modal);
+      const z = previewZoneAt(e.clientX, e.clientY, null);
       // Ignore the bottom zone — the dock lives at the bottom, so horizontal
       // chip reordering must not get hijacked into a bottom-half snap.
       chipSnapZone = (z && z.name !== 'bottom-half') ? z : null;

@@ -10,6 +10,8 @@ import logging
 from pathlib import Path
 from typing import Optional
 
+import subprocess
+
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
@@ -225,5 +227,51 @@ def setup_reins_routes() -> APIRouter:
         except Exception as e:
             logger.error(f"system_secret failed: {e}")
             raise HTTPException(502, f"Failed to get secret: {e}")
+
+    # --- CLI Mirror Endpoints ---
+
+    @router.get("/cli/{cmd}")
+    async def run_cli_cmd(request: Request, cmd: str):
+        require_admin(request)
+        allowed = {"models", "ody", "bin", "local"}
+        if cmd not in allowed:
+            raise HTTPException(400, "Command not allowed")
+        
+        args = ["reins", cmd]
+        if cmd in {"ody", "local", "bin"}:
+            if cmd == "bin":
+                args.append("list")
+            else:
+                args.append("status")
+                
+        try:
+            result = subprocess.run(args, capture_output=True, text=True, check=False)
+            return {"output": result.stdout if result.returncode == 0 else result.stderr}
+        except Exception as e:
+            logger.error(f"reins cli {cmd} failed: {e}")
+            raise HTTPException(502, f"CLI unreachable: {e}")
+
+    class DigestIn(BaseModel):
+        path: str
+
+    @router.post("/cli/digest")
+    async def run_cli_digest(request: Request, body: DigestIn):
+        require_admin(request)
+        try:
+            result = subprocess.run(["reins", "digest", body.path], capture_output=True, text=True, check=False)
+            return {"output": result.stdout if result.returncode == 0 else result.stderr}
+        except Exception as e:
+            logger.error(f"reins cli digest failed: {e}")
+            raise HTTPException(502, f"CLI unreachable: {e}")
+
+    @router.post("/cli/backup")
+    async def run_cli_backup(request: Request):
+        require_admin(request)
+        try:
+            result = subprocess.run(["reins", "backup"], capture_output=True, text=True, check=False)
+            return {"output": result.stdout if result.returncode == 0 else result.stderr}
+        except Exception as e:
+            logger.error(f"reins cli backup failed: {e}")
+            raise HTTPException(502, f"CLI unreachable: {e}")
 
     return router

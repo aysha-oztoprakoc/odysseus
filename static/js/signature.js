@@ -458,19 +458,19 @@ export function capture(opts = {}) {
 
 // ── pick: show saved signatures + new tile ───────────────────────────────
 export function pick(opts = {}) {
-  return new Promise(async (resolve) => {
-    const sigs = await _listSignatures();
-    const tiles = sigs.map((s) => {
-      const dataUrl = _safeSignatureDataUrl(s.data_url);
-      if (!dataUrl) return '';
-      return `
-      <div class="sig-tile" data-id="${_esc(s.id)}">
-        <img src="${_esc(dataUrl)}"/>
-        <div style="margin-top:4px;font-size:0.72rem;color:var(--fg);opacity:0.85;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_esc(s.name || '')}</div>
-        <button class="sig-tile-del" data-id="${_esc(s.id)}" title="Delete">×</button>
-      </div>
-    `;
-    }).join('');
+  return new Promise((resolve) => {
+    _listSignatures().then((sigs) => {
+      const tiles = sigs.map((s) => {
+        const dataUrl = _safeSignatureDataUrl(s.data_url);
+        if (!dataUrl) return '';
+        return `
+        <div class="sig-tile" data-id="${_esc(s.id)}">
+          <img src="${_esc(dataUrl)}"/>
+          <div style="margin-top:4px;font-size:0.72rem;color:var(--fg);opacity:0.85;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_esc(s.name || '')}</div>
+          <button class="sig-tile-del" data-id="${_esc(s.id)}" title="Delete">×</button>
+        </div>
+      `;
+      }).join('');
 
     const overlay = _modal(`
       <div class="modal-content" style="width:min(560px,94vw);">
@@ -518,6 +518,7 @@ export function pick(opts = {}) {
       if (created) setLastUsed(created);
       resolve(created);
     };
+    });
   });
 }
 

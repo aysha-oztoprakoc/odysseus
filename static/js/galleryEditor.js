@@ -2608,7 +2608,7 @@ function _buildEditor(container) {
   controls.querySelectorAll('.ge-color-picker').forEach(attachColorPicker);
   controls.querySelectorAll('.ge-color-picker').forEach(el => {
     // Set the initial swatch background so it reflects the starting value.
-    el.value = el.value;
+    
   });
   // Hide brush controls initially (default tool is Move)
   const initBrushCtrl = document.getElementById('ge-brush-controls');
@@ -3732,7 +3732,7 @@ export function closeEditor() {
   // doesn't leave stale chips/panels behind on top of the gallery.
   try { _closeFxMenu(); } catch {}
   try { _closeAdjPopup(); } catch {}
-  try { _closeHistoryPanel(); } catch {}
+  try { window._closeHistoryPanel?.(); } catch {}
   try {
     const dock = document.getElementById('ge-fx-dock');
     if (dock) dock.remove();

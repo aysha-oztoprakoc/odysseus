@@ -598,7 +598,7 @@ async function _handleStart() {
   if (_mobile) _dismissKeyboard(queryEl); else queryEl.focus();
   _resetCategoryToAuto();
   jobs.startJob(query, settings).catch((e) => {
-    if (typeof uiModule !== 'undefined' && uiModule?.showError) uiModule.showError('Failed to start research');
+    if (typeof window.uiModule !== 'undefined' && window.uiModule?.showError) window.uiModule.showError('Failed to start research');
     queryEl.value = query; // restore so user can retry
   });
 }

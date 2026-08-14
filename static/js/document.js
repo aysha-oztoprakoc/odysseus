@@ -6365,7 +6365,7 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
     });
 
     requestAnimationFrame(syncOverflow);
-    _syncOverflow = syncOverflow;
+    toolbar._syncOverflow = syncOverflow;
   }
 
   /** Divider drag to resize the editor pane */

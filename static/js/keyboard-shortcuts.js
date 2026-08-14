@@ -161,7 +161,7 @@ export function initKeyboardShortcuts(modules) {
         if (ir) ir.classList.remove('rail-hidden');
         if (sb) sb.classList.remove('hidden');
       }
-      if (typeof syncRailSide === 'function') syncRailSide();
+      if (typeof window.syncRailSide === 'function') window.syncRailSide();
       return;
     }
     if (_matchesCombo(e, kb.tts)) {

@@ -287,7 +287,7 @@ window.addEventListener('pageshow', clearFreshComposerRestore);
     if (collapsed) {
       sidebar.style.width = '';
       sidebar.classList.add('hidden');
-      if (typeof syncRailSide === 'function') syncRailSide();
+      if (typeof window.syncRailSide === 'function') window.syncRailSide();
     } else {
       const finalWidth = parseInt(sidebar.style.width, 10);
       if (finalWidth >= MIN_WIDTH) {
@@ -323,14 +323,14 @@ window.addEventListener('pageshow', clearFreshComposerRestore);
       // Didn't drag far enough — snap back to icon rail
       sidebar.style.width = '';
       sidebar.classList.add('hidden');
-      if (typeof syncRailSide === 'function') syncRailSide();
+      if (typeof window.syncRailSide === 'function') window.syncRailSide();
     } else {
       // Expanded — save width and sync
       const finalWidth = parseInt(sidebar.style.width, 10);
       if (finalWidth >= MIN_WIDTH) {
         Storage.set(STORAGE_KEY, String(finalWidth));
       }
-      if (typeof syncRailSide === 'function') syncRailSide();
+      if (typeof window.syncRailSide === 'function') window.syncRailSide();
     }
   }
 

@@ -442,8 +442,8 @@ function typewriterReply(text, options = {}) {
         if (options.renderMarkdown) {
           requestAnimationFrame(() => {
             body.style.whiteSpace = '';
-            body.innerHTML = markdownModule.processWithThinking(markdownModule.squashOutsideCode(text));
-            if (markdownModule.renderMermaid) markdownModule.renderMermaid(body);
+            body.innerHTML = window.markdownModule.processWithThinking(window.markdownModule.squashOutsideCode(text));
+            if (window.markdownModule.renderMermaid) window.markdownModule.renderMermaid(body);
             uiModule.scrollHistory();
           });
         }

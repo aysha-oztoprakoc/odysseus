@@ -4859,7 +4859,7 @@ async function _toggleFromSenderPanel(reader, data, btn) {
 
   const fromAddr = String(data.from_address || '').trim();
   if (!fromAddr) {
-    if (typeof showError === 'function') showError('No sender address available');
+    if (typeof window.showError === 'function') window.showError('No sender address available');
     return;
   }
 
@@ -6264,7 +6264,7 @@ async function _generateSummary(reader, data, btn) {
   } catch (e) {
     sp.destroy();
     panel.remove();
-    if (uiModule) uiModule.showError?.('Failed to summarize');
+    if (window.uiModule) window.uiModule.showError?.('Failed to summarize');
   } finally {
     if (btn) btn.disabled = false;
   }
@@ -6289,7 +6289,7 @@ async function _translateEmail(reader, language, opts = {}) {
   const targetLanguage = language || 'English';
   const sourceText = _emailBodyTextForTranslate(reader);
   if (!sourceText) {
-    try { uiModule?.showError?.('No email body to translate'); } catch {}
+    try { window.uiModule?.showError?.('No email body to translate'); } catch {}
     return;
   }
 
@@ -6340,12 +6340,12 @@ async function _translateEmail(reader, language, opts = {}) {
         .trim();
     } else {
       panel.remove();
-      try { uiModule?.showError?.(result.error || 'Failed to translate'); } catch {}
+      try { window.uiModule?.showError?.(result.error || 'Failed to translate'); } catch {}
     }
   } catch (_) {
     sp.destroy();
     panel.remove();
-    try { uiModule?.showError?.('Failed to translate'); } catch {}
+    try { window.uiModule?.showError?.('Failed to translate'); } catch {}
   }
 }
 

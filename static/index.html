@@ -566,6 +566,13 @@
           <h5 style="margin:0 0 8px 0;">Training</h5>
           <button id="harness-train-refresh" class="memory-toolbar-btn" style="margin-bottom:8px;">Check QLoRA Capability</button>
           <div id="harness-train-status" style="font-size:12px;opacity:0.8;white-space:pre-wrap;"></div>
+          <hr style="border-color:var(--border);opacity:0.3;margin:12px 0;">
+          <h5 style="margin:0 0 8px 0;">Digest (Wiki Extraction)</h5>
+          <div style="display:flex;flex-direction:column;gap:6px;font-size:12px;">
+            <input type="text" id="harness-cli-digest-path" placeholder="File or directory path" class="memory-search-input" />
+            <button id="harness-cli-digest-btn" class="memory-toolbar-btn" style="align-self:flex-start;">Run Digest</button>
+            <pre id="harness-cli-digest-out" style="font-size:11px;opacity:0.8;max-height:100px;overflow-y:auto;white-space:pre-wrap;background:var(--bg-secondary);padding:6px;border-radius:4px;"></pre>
+          </div>
         </div>
 
         <div class="harness-tab-panel hidden" data-harness-panel="system">
@@ -588,6 +595,16 @@
             <button id="harness-sys-secret-btn" class="memory-toolbar-btn">Reveal</button>
           </div>
           <div id="harness-sys-secret-val" style="font-size:12px;opacity:0.8;margin-top:4px;"></div>
+          <hr style="border-color:var(--border);opacity:0.3;margin:12px 0;">
+          <h5 style="margin:0 0 8px 0;">CLI Tooling Mirror</h5>
+          <div style="display:flex;gap:6px;font-size:12px;margin-bottom:8px;flex-wrap:wrap;">
+            <button id="harness-cli-models" class="memory-toolbar-btn">Models</button>
+            <button id="harness-cli-local" class="memory-toolbar-btn">Local Status</button>
+            <button id="harness-cli-ody" class="memory-toolbar-btn">Ody Status</button>
+            <button id="harness-cli-bin" class="memory-toolbar-btn">Bin List</button>
+            <button id="harness-cli-backup" class="memory-toolbar-btn">Backup</button>
+          </div>
+          <pre id="harness-cli-output" style="font-size:11px;opacity:0.8;max-height:150px;overflow-y:auto;background:var(--bg-secondary);padding:6px;border-radius:4px;white-space:pre-wrap;"></pre>
         </div>
 
         <div style="border-top:1px solid var(--border);padding-top:8px;font-size:12px;opacity:0.7;" id="harness-tokens-strip">
