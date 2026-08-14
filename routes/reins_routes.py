@@ -228,6 +228,116 @@ def setup_reins_routes() -> APIRouter:
             logger.error(f"system_secret failed: {e}")
             raise HTTPException(502, f"Failed to get secret: {e}")
 
+    @router.get("/wiki/pages")
+    async def wiki_list_pages(request: Request, category: Optional[str] = None, owner: Optional[str] = None, limit: int = 50, offset: int = 0):
+        require_admin(request)
+        try:
+            from reins.harness.wiki import WikiDB
+            with WikiDB() as db:
+                pages = db.list_pages(category=category, owner=owner, limit=limit, offset=offset)
+                return [dict(p) for p in pages]
+        except Exception as e:
+            logger.error(f"wiki list_pages failed: {e}")
+            raise HTTPException(502, f"wiki unreachable: {e}")
+
+    @router.get("/wiki/pages/{slug}")
+    async def wiki_get_page(request: Request, slug: str):
+        require_admin(request)
+        try:
+            from reins.harness.wiki import WikiDB
+            with WikiDB() as db:
+                page = db.get_page(slug)
+                if not page:
+                    raise HTTPException(404, "Page not found")
+                return dict(page)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"wiki get_page failed: {e}")
+            raise HTTPException(502, f"wiki unreachable: {e}")
+
+    class PageIn(BaseModel):
+        title: str
+        content: str
+        category: str = "general"
+        fmt: str = "md"
+        metadata_json: str = "{}"
+
+    @router.post("/wiki/pages")
+    @router.put("/wiki/pages/{slug}")
+    async def wiki_upsert_page(request: Request, body: PageIn, slug: Optional[str] = None):
+        require_admin(request)
+        try:
+            from reins.harness.wiki import WikiDB
+            with WikiDB() as db:
+                new_slug = db.upsert_page(
+                    title=body.title,
+                    content=body.content,
+                    slug=slug,
+                    category=body.category,
+                    fmt=body.fmt,
+                    metadata_json=body.metadata_json,
+                    owner="harness"
+                )
+                return {"slug": new_slug}
+        except Exception as e:
+            logger.error(f"wiki upsert_page failed: {e}")
+            raise HTTPException(502, f"wiki unreachable: {e}")
+
+    @router.get("/wiki/memories")
+    async def wiki_list_memories(request: Request, limit: int = 50, offset: int = 0):
+        require_admin(request)
+        try:
+            from reins.harness.wiki import WikiDB
+            with WikiDB() as db:
+                cur = db.conn.execute("SELECT * FROM memories ORDER BY timestamp DESC LIMIT ? OFFSET ?", (limit, offset))
+                return [dict(r) for r in cur.fetchall()]
+        except Exception as e:
+            logger.error(f"wiki list_memories failed: {e}")
+            raise HTTPException(502, f"wiki unreachable: {e}")
+
+    class MemoryIn(BaseModel):
+        text: str
+        category: str = "general"
+
+    @router.post("/wiki/memories")
+    async def wiki_upsert_memory(request: Request, body: MemoryIn):
+        require_admin(request)
+        try:
+            from reins.harness.wiki import WikiDB
+            with WikiDB() as db:
+                uid = db.add_memory(text=body.text, category=body.category, owner="harness")
+                return {"uid": uid}
+        except Exception as e:
+            logger.error(f"wiki upsert_memory failed: {e}")
+            raise HTTPException(502, f"wiki unreachable: {e}")
+
+    @router.delete("/wiki/pages/{slug}")
+    async def wiki_delete_page(request: Request, slug: str):
+        require_admin(request)
+        try:
+            from reins.harness.wiki import WikiDB
+            with WikiDB() as db:
+                with db._tx():
+                    db.conn.execute("DELETE FROM pages WHERE slug = ?", (slug,))
+                return {"ok": True}
+        except Exception as e:
+            logger.error(f"wiki delete_page failed: {e}")
+            raise HTTPException(502, f"wiki unreachable: {e}")
+
+    @router.delete("/wiki/memories/{uid}")
+    async def wiki_delete_memory(request: Request, uid: str):
+        require_admin(request)
+        try:
+            from reins.harness.wiki import WikiDB
+            with WikiDB() as db:
+                with db._tx():
+                    db.conn.execute("DELETE FROM memories WHERE uid = ?", (uid,))
+                return {"ok": True}
+        except Exception as e:
+            logger.error(f"wiki delete_memory failed: {e}")
+            raise HTTPException(502, f"wiki unreachable: {e}")
+
     # --- CLI Mirror Endpoints ---
 
     @router.get("/cli/{cmd}")

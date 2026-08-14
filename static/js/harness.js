@@ -23,6 +23,15 @@ async function _post(path, body) {
   return res.json();
 }
 
+async function _del(path) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'DELETE',
+    credentials: 'same-origin',
+  });
+  if (!res.ok) throw new Error(`${path} -> ${res.status}`);
+  return res.json();
+}
+
 function _escapeHtml(s) {
   const div = document.createElement('div');
   div.textContent = s ?? '';
@@ -104,10 +113,32 @@ async function _refreshAgents() {
 async function _runWikiSearch(query) {
   const results = document.getElementById('harness-wiki-results');
   if (!results) return;
-  if (!query.trim()) { results.innerHTML = ''; return; }
+  if (!query.trim()) { 
+    results.innerHTML = '<div style="opacity:0.6;">Loading recent...</div>';
+    try {
+      const [pages, memories] = await Promise.all([
+        _get('/api/reins/wiki/pages?limit=15'),
+        _get('/api/reins/wiki/memories?limit=15')
+      ]);
+      results.innerHTML = [
+        ...pages.map(p => `
+          <div class="wiki-result-item" style="cursor:pointer;padding:4px;border-radius:4px;" onclick="window.harnessModule.openWikiEditor('page', '${_escapeHtml(p.slug)}')">
+            <strong>[Page: ${_escapeHtml(p.category)}]</strong> ${_escapeHtml(p.title || p.slug)}
+          </div>`),
+        ...memories.map(m => `
+          <div class="wiki-result-item" style="cursor:pointer;padding:4px;border-radius:4px;" onclick="window.harnessModule.openWikiEditor('memory', '${_escapeHtml(m.uid)}')">
+            <strong>[Memory: ${_escapeHtml(m.category)}]</strong> <span style="opacity:0.8;">${_escapeHtml((m.text || '').substring(0, 60))}...</span>
+          </div>`)
+      ].join('<hr style="border-color:var(--border);opacity:0.3;margin:4px 0;">');
+    } catch(e) {
+      results.innerHTML = `<div style="color:var(--red);">Harness unreachable: ${_escapeHtml(e.message)}</div>`;
+    }
+    return; 
+  }
+  
   results.innerHTML = '<div style="opacity:0.6;">Searching…</div>';
   try {
-    const res = await _get(`/api/reins/wiki/search?q=${encodeURIComponent(query)}&limit=8`);
+    const res = await _get(`/api/reins/wiki/search?q=${encodeURIComponent(query)}&limit=15`);
     const pages = res.pages || [];
     const memories = res.memories || [];
     if (!pages.length && !memories.length) {
@@ -115,11 +146,121 @@ async function _runWikiSearch(query) {
       return;
     }
     results.innerHTML = [
-      ...pages.map(p => `<div><strong>[${_escapeHtml(p.category)}]</strong> ${_escapeHtml(p.slug)}<br><span style="opacity:0.7;">${_escapeHtml(p.snippet)}</span></div>`),
-      ...memories.map(m => `<div><strong>[${_escapeHtml(m.category)}]</strong> ${_escapeHtml(m.snippet)}</div>`),
-    ].join('<hr style="border-color:var(--border);opacity:0.3;">');
+      ...pages.map(p => `
+        <div class="wiki-result-item" style="cursor:pointer;padding:4px;border-radius:4px;" onclick="window.harnessModule.openWikiEditor('page', '${_escapeHtml(p.slug)}')">
+          <strong>[Page: ${_escapeHtml(p.category)}]</strong> ${_escapeHtml(p.slug)}<br><span style="opacity:0.7;">${_escapeHtml(p.snippet)}</span>
+        </div>`),
+      ...memories.map(m => `
+        <div class="wiki-result-item" style="cursor:pointer;padding:4px;border-radius:4px;" onclick="window.harnessModule.openWikiEditor('memory', '${_escapeHtml(m.uid)}')">
+          <strong>[Memory: ${_escapeHtml(m.category)}]</strong> ${_escapeHtml(m.snippet)}
+        </div>`),
+    ].join('<hr style="border-color:var(--border);opacity:0.3;margin:4px 0;">');
   } catch (e) {
     results.innerHTML = `<div style="color:var(--red);">Harness unreachable: ${_escapeHtml(e.message)}</div>`;
+  }
+}
+
+async function openWikiEditor(type, id) {
+  const pane = document.getElementById('harness-wiki-editor-pane');
+  if (!pane) return;
+  
+  pane.style.display = 'flex';
+  document.getElementById('harness-wiki-editor-type').value = type;
+  document.getElementById('harness-wiki-editor-id').value = id || '';
+  
+  const slugEl = document.getElementById('harness-wiki-editor-slug');
+  const titleEl = document.getElementById('harness-wiki-editor-title');
+  const catEl = document.getElementById('harness-wiki-editor-category');
+  const contentEl = document.getElementById('harness-wiki-editor-content');
+  const delBtn = document.getElementById('harness-wiki-editor-delete');
+  const saveBtn = document.getElementById('harness-wiki-editor-save');
+  
+  saveBtn.textContent = 'Save';
+  delBtn.style.display = id ? 'block' : 'none';
+  
+  if (type === 'memory') {
+    titleEl.style.display = 'none';
+    slugEl.placeholder = "Memory ID (auto-generated)";
+    slugEl.readOnly = true;
+  } else {
+    titleEl.style.display = 'block';
+    slugEl.placeholder = "Slug (leave blank to auto-generate)";
+    slugEl.readOnly = !!id;
+  }
+  
+  if (!id) {
+    slugEl.value = '';
+    titleEl.value = '';
+    catEl.value = 'general';
+    contentEl.value = '';
+    return;
+  }
+  
+  slugEl.value = id;
+  saveBtn.textContent = 'Loading...';
+  try {
+    if (type === 'page') {
+      const page = await _get(`/api/reins/wiki/pages/${encodeURIComponent(id)}`);
+      titleEl.value = page.title || '';
+      catEl.value = page.category || 'general';
+      contentEl.value = page.content || '';
+    } else {
+      const mems = await _get(`/api/reins/wiki/memories`);
+      const m = mems.find(x => x.uid === id);
+      if (m) {
+        catEl.value = m.category || 'general';
+        contentEl.value = m.text || '';
+      } else {
+        // Fallback if memory isn't in recent
+        contentEl.value = 'Memory content could not be loaded from recent list.';
+      }
+    }
+    saveBtn.textContent = 'Save';
+  } catch(e) {
+    saveBtn.textContent = 'Error Loading';
+    console.error(e);
+  }
+}
+
+async function _saveWikiEditor() {
+  const type = document.getElementById('harness-wiki-editor-type').value;
+  const id = document.getElementById('harness-wiki-editor-id').value;
+  const slug = document.getElementById('harness-wiki-editor-slug').value;
+  const title = document.getElementById('harness-wiki-editor-title').value;
+  const cat = document.getElementById('harness-wiki-editor-category').value;
+  const content = document.getElementById('harness-wiki-editor-content').value;
+  const saveBtn = document.getElementById('harness-wiki-editor-save');
+  
+  if (!content.trim()) return;
+  
+  saveBtn.textContent = 'Saving...';
+  try {
+    if (type === 'page') {
+      const url = id ? `/api/reins/wiki/pages/${encodeURIComponent(id)}` : `/api/reins/wiki/pages`;
+      await _post(url, { title: title || slug || 'Untitled', content, category: cat || 'general' });
+    } else {
+      await _post(`/api/reins/wiki/memories`, { text: content, category: cat || 'general' });
+    }
+    document.getElementById('harness-wiki-editor-pane').style.display = 'none';
+    _runWikiSearch(document.getElementById('harness-wiki-search-input').value);
+  } catch(e) {
+    saveBtn.textContent = 'Error';
+    console.error(e);
+  }
+}
+
+async function _deleteWikiEditor() {
+  const type = document.getElementById('harness-wiki-editor-type').value;
+  const id = document.getElementById('harness-wiki-editor-id').value;
+  if (!id) return;
+  if (!confirm(`Delete this ${type}?`)) return;
+  
+  try {
+    await _del(`/api/reins/wiki/${type === 'page' ? 'pages' : 'memories'}/${encodeURIComponent(id)}`);
+    document.getElementById('harness-wiki-editor-pane').style.display = 'none';
+    _runWikiSearch(document.getElementById('harness-wiki-search-input').value);
+  } catch(e) {
+    console.error(e);
   }
 }
 
@@ -271,6 +412,7 @@ function _switchTab(name) {
   });
   if (name === 'trail') _refreshTrail();
   else if (name === 'agents') _refreshAgents();
+  else if (name === 'wiki') _runWikiSearch('');
   else if (name === 'omnigent') _refreshOmnigent();
   else if (name === 'hardware') { _refreshHardware(); _refreshCoord(); }
   else if (name === 'training') _refreshTraining();
@@ -295,6 +437,14 @@ function _wireOnce() {
       debounce = setTimeout(() => _runWikiSearch(searchInput.value), 300);
     });
   }
+  
+  document.getElementById('harness-wiki-new-page')?.addEventListener('click', () => openWikiEditor('page', null));
+  document.getElementById('harness-wiki-new-memory')?.addEventListener('click', () => openWikiEditor('memory', null));
+  document.getElementById('harness-wiki-editor-cancel')?.addEventListener('click', () => {
+    document.getElementById('harness-wiki-editor-pane').style.display = 'none';
+  });
+  document.getElementById('harness-wiki-editor-save')?.addEventListener('click', _saveWikiEditor);
+  document.getElementById('harness-wiki-editor-delete')?.addEventListener('click', _deleteWikiEditor);
 
   document.getElementById('harness-hardware-refresh')?.addEventListener('click', _refreshHardware);
   document.getElementById('harness-train-refresh')?.addEventListener('click', _refreshTraining);
@@ -356,6 +506,6 @@ export function isHarnessOpen() {
   return _open;
 }
 
-const harnessModule = { openHarness, closeHarness, isHarnessOpen };
+const harnessModule = { openHarness, closeHarness, isHarnessOpen, openWikiEditor };
 window.harnessModule = harnessModule;
 export default harnessModule;

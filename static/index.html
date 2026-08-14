@@ -526,10 +526,30 @@
           <div id="harness-agents-list" style="display:flex;flex-direction:column;gap:10px;"></div>
         </div>
 
-        <div class="harness-tab-panel hidden" data-harness-panel="wiki">
-          <input type="text" id="harness-wiki-search-input" placeholder="Search the wiki…"
-                 class="memory-search-input" style="width:100%;margin-bottom:8px;" />
-          <div id="harness-wiki-results" style="display:flex;flex-direction:column;gap:8px;font-size:12px;"></div>
+        <div class="harness-tab-panel hidden" data-harness-panel="wiki" style="display:flex;flex-direction:column;height:100%;">
+          <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <input type="text" id="harness-wiki-search-input" placeholder="Search the wiki…" class="memory-search-input" style="flex:1;" />
+            <button id="harness-wiki-new-page" class="memory-toolbar-btn">+ Page</button>
+            <button id="harness-wiki-new-memory" class="memory-toolbar-btn">+ Memory</button>
+          </div>
+          <div style="display:flex;flex:1;gap:12px;min-height:300px;">
+            <div id="harness-wiki-results" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;font-size:12px;border-right:1px solid var(--border);padding-right:8px;"></div>
+            <div id="harness-wiki-editor-pane" style="flex:2;display:flex;flex-direction:column;gap:8px;display:none;">
+              <input type="hidden" id="harness-wiki-editor-type" />
+              <input type="hidden" id="harness-wiki-editor-id" />
+              <div style="display:flex;gap:8px;">
+                <input type="text" id="harness-wiki-editor-slug" placeholder="Slug / ID" class="memory-search-input" style="flex:1;" />
+                <input type="text" id="harness-wiki-editor-title" placeholder="Title (for pages)" class="memory-search-input" style="flex:2;" />
+                <input type="text" id="harness-wiki-editor-category" placeholder="Category" class="memory-search-input" style="flex:1;" />
+              </div>
+              <textarea id="harness-wiki-editor-content" class="memory-search-input" style="flex:1;min-height:200px;font-family:monospace;resize:vertical;" placeholder="Content (Markdown for pages, text for memories)"></textarea>
+              <div style="display:flex;gap:8px;justify-content:flex-end;">
+                <button id="harness-wiki-editor-cancel" class="memory-toolbar-btn" style="opacity:0.8;">Cancel</button>
+                <button id="harness-wiki-editor-delete" class="memory-toolbar-btn" style="color:var(--red);border-color:var(--red);display:none;">Delete</button>
+                <button id="harness-wiki-editor-save" class="memory-toolbar-btn" style="font-weight:bold;">Save</button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="harness-tab-panel hidden" data-harness-panel="omnigent">
