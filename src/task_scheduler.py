@@ -867,17 +867,16 @@ class TaskScheduler:
                 async def _cancel_if_foreground_active():
                     # Give the just-finished quiet gate a tiny grace window,
                     # then keep enforcing "background means background" while
-                    # a long email/LLM action is already running.
+                    # a long email/LLM action is already running. Waits
+                    # event-driven on interactive_gate's condition instead of
+                    # polling every 1s (PON zero-polling).
                     await asyncio.sleep(1.0)
-                    from src.interactive_gate import has_foreground_activity
-                    while True:
-                        await asyncio.sleep(1.0)
-                        if has_foreground_activity():
-                            foreground_cancel["hit"] = True
-                            logger.info("Task '%s' interrupted because Odysseus became active", task.name)
-                            if current_task:
-                                current_task.cancel()
-                            return
+                    from src.interactive_gate import wait_for_foreground_activity
+                    if await wait_for_foreground_activity():
+                        foreground_cancel["hit"] = True
+                        logger.info("Task '%s' interrupted because Odysseus became active", task.name)
+                        if current_task:
+                            current_task.cancel()
 
                 foreground_monitor = asyncio.create_task(_cancel_if_foreground_active())
             try:

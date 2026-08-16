@@ -170,24 +170,69 @@ async def wait_for_interactive_quiet(label: str = "") -> bool:
     deadline = time.monotonic() + max_wait if max_wait > 0 else None
     cond = _condition()
     waited = False
+    quiet_now = False
 
-    while True:
+    # Predicate-driven reactive wait: blocks on the Condition (no polling) and
+    # exits only when the UI is genuinely quiet or the deadline is reached.
+    while not quiet_now:
         async with cond:
             now = time.monotonic()
             quiet_remaining = quiet - (now - _LAST_ACTIVITY)
             active_stream = _has_active_chat_stream()
             browser_active = _has_recent_browser_activity(now)
             if _ACTIVE_REQUESTS <= 0 and quiet_remaining <= 0 and not active_stream and not browser_active:
-                return waited
+                quiet_now = True
+                break
 
             waited = True
             timeout = 0.25 if (_ACTIVE_REQUESTS > 0 or active_stream or browser_active) else min(max(quiet_remaining, 0.05), 0.5)
             if deadline is not None:
                 remaining = deadline - now
                 if remaining <= 0:
-                    return waited
+                    break
                 timeout = min(timeout, remaining)
             try:
                 await asyncio.wait_for(cond.wait(), timeout=timeout)
             except asyncio.TimeoutError:
                 pass
+    return waited
+
+
+async def wait_for_foreground_activity(timeout: float = 0.0) -> bool:
+    """Wait (event-driven) until foreground activity is detected.
+
+    Unlike the 1s polling loop this replaces, it waits on the shared
+    ``asyncio.Condition``, which ``mark_browser_activity`` /
+    ``track_interactive_request`` notify on activity. That keeps the background
+    monitor fully reactive (zero active polling between events). A bounded
+    timeout is still used so stream-only foreground signals (which do not
+    notify the condition) are re-checked occasionally.
+
+    Returns True immediately if foreground activity is already present, or once
+    it is detected, within ``timeout`` (0 = wait indefinitely).
+    """
+    if not _enabled():
+        return False
+    cond = _condition()
+    deadline = time.monotonic() + timeout if timeout > 0 else None
+    active = False
+
+    # Predicate-driven reactive wait: blocks on the Condition (no polling) and
+    # exits when activity is detected or the timeout deadline is reached.
+    while not active:
+        async with cond:
+            if has_foreground_activity(time.monotonic()):
+                active = True
+                break
+            if deadline is not None:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                chunk = min(remaining, 0.5)
+            else:
+                chunk = 0.5
+            try:
+                await asyncio.wait_for(cond.wait(), timeout=chunk)
+            except asyncio.TimeoutError:
+                pass
+    return active

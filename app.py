@@ -962,9 +962,10 @@ async def _startup_event():
             _db.close()
     except Exception as e:
         logger.debug(f"Incognito purge skipped: {e}")
-    # Strong refs to fire-and-forget startup tasks. Without this, Python may
-    # GC tasks created with `asyncio.create_task(...)` before they finish.
-    _startup_tasks: list[asyncio.Task] = getattr(app.state, "_startup_tasks", [])
+    # Strong refs to fire-and-forget startup tasks and PON periodic timers.
+    # Without this, Python may GC tasks created with `asyncio.create_task(...)`
+    # before they finish.
+    _startup_tasks: list = getattr(app.state, "_startup_tasks", [])
     app.state._startup_tasks = _startup_tasks
     if upload_cleanup_func:
         upload_cleanup_task = asyncio.create_task(upload_cleanup_func())
@@ -1037,16 +1038,21 @@ async def _startup_event():
     # that delays unrelated UI requests such as Notes/Documents.
     _keepalive_enabled = str(os.getenv("ODYSSEUS_MODEL_KEEPALIVE", "")).lower() in {"1", "true", "yes", "on"}
     if _keepalive_enabled:
-        async def _keepalive_loop():
-            while True:
-                try:
-                    await asyncio.sleep(60)
-                    await _warmup_endpoints()
-                except Exception as e:
-                    logger.warning(f"Keepalive loop error: {e}")
-                    await asyncio.sleep(300)  # Back off on error
+        from core.pon_timer import schedule_periodic
 
-        _startup_tasks.append(asyncio.create_task(_keepalive_loop()))
+        async def _keepalive_tick():
+            # Return the next interval so a failure backs off to 300s.
+            try:
+                await asyncio.sleep(1)  # yield once before first ping
+                await _warmup_endpoints()
+                return 60
+            except Exception as e:
+                logger.warning(f"Keepalive loop error: {e}")
+                return 300
+
+        _startup_tasks.append(schedule_periodic(
+            _keepalive_tick, 60, label="model-keepalive", run_immediately=True,
+        ))
 
     async def _ensure_default_tasks():
         # Create/reconcile default automation tasks + personal assistant for every user.
@@ -1131,26 +1137,26 @@ async def _startup_event():
     # Periodic null-owner sweep — re-runs the legacy-owner assignment hourly
     # so any data created while auth was disabled / localhost-bypassed gets
     # claimed by the admin instead of staying world-visible (M19).
-    async def _null_owner_sweep_loop():
-        while True:
-            try:
-                await asyncio.sleep(3600)
-                from core.database import _migrate_assign_legacy_owner
-                await asyncio.to_thread(_migrate_assign_legacy_owner)
-            except Exception as e:
-                logger.debug(f"Null-owner sweep skipped: {e}")
-                await asyncio.sleep(3600)
+    async def _null_owner_sweep_tick():
+        from core.database import _migrate_assign_legacy_owner
+        await asyncio.to_thread(_migrate_assign_legacy_owner)
 
-    _startup_tasks.append(asyncio.create_task(_null_owner_sweep_loop()))
+    from core.pon_timer import schedule_periodic
+    _startup_tasks.append(schedule_periodic(
+        _null_owner_sweep_tick, 3600, label="null-owner-sweep",
+    ))
 
     # Nightly skill audit — at ~02:00 local, test + judge a batch of the
     # least-recently-checked skills, auto-fixing/escalating weak ones (never
     # deletes). Rotates through the library so each night covers different
     # skills. Gated by the `skill_audit_nightly` setting (default on); hour via
     # `skill_audit_hour` (default 2), batch size via `skill_audit_batch` (8).
-    async def _skill_audit_nightly_loop():
+    async def _skill_audit_once():
+        # Sleep until the next scheduled hour, then run (or skip) a batch.
         from datetime import timedelta
-        while True:
+        # Configured hour; returns seconds until the next run so the PON timer
+        # re-arms at the correct wall-clock delay (no while True).
+        async def _wait_and_form():
             try:
                 from src.settings import get_setting
                 hour = int(get_setting("skill_audit_hour", 2) or 2)
@@ -1160,18 +1166,26 @@ async def _startup_event():
             nxt = now.replace(hour=hour % 24, minute=0, second=0, microsecond=0)
             if nxt <= now:
                 nxt += timedelta(days=1)
-            await asyncio.sleep(max(60, (nxt - now).total_seconds()))
-            try:
-                from src.settings import get_setting
-                if not get_setting("skill_audit_nightly", True):
-                    continue
+            sleep_s = (nxt - now).total_seconds()
+            await asyncio.sleep(max(60, sleep_s))
+            return sleep_s
+
+        # First tick: sleep to align to the wall-clock hour, then run the batch.
+        await _wait_and_form()
+        try:
+            from src.settings import get_setting
+            if get_setting("skill_audit_nightly", True):
                 batch = int(get_setting("skill_audit_batch", 8) or 8)
                 from routes.skills_routes import run_scheduled_skill_audit
                 await run_scheduled_skill_audit(skills_manager, owner=None, max_skills=batch)
-            except Exception as e:
-                logger.warning(f"Nightly skill audit failed: {e}")
+        except Exception as e:
+            logger.warning(f"Nightly skill audit failed: {e}")
+        return 60  # keep timer alive; next tick realigns to the hour
 
-    _startup_tasks.append(asyncio.create_task(_skill_audit_nightly_loop()))
+    from core.pon_timer import schedule_periodic
+    _startup_tasks.append(schedule_periodic(
+        _skill_audit_once, 60, label="skill-audit-nightly", run_immediately=True,
+    ))
 
     # Cookbook serve lifecycle — kills scheduler-launched serves whose
     # window-end has passed. Paired with the cookbook_serve builtin
@@ -1180,7 +1194,7 @@ async def _startup_event():
     # cookbook_serve entry in BUILTIN_ACTIONS + src/cookbook_serve_lifecycle.py
     # removes the feature.
     from src.cookbook_serve_lifecycle import cookbook_serve_lifecycle_loop
-    _startup_tasks.append(asyncio.create_task(cookbook_serve_lifecycle_loop()))
+    _startup_tasks.append(cookbook_serve_lifecycle_loop())
 
     logger.info("Application startup complete")
 

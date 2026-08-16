@@ -132,8 +132,20 @@ async def _run_followup(rec: dict) -> bool:
     return True
 
 
-async def _loop():
-    while True:
+def start_bg_monitor():
+    """Idempotent — start the always-on background-job monitor.
+
+    Uses the PON-compliant event-loop periodic timer (core.pon_timer): the tick
+    is re-armed reactively after an ``asyncio.sleep``, so there is no ``while
+    True`` spin and idle CPU stays ~0% between ticks.
+    """
+    global _monitor_task
+    if _monitor_task and not _monitor_task.done():
+        return _monitor_task
+
+    from core.pon_timer import schedule_periodic
+
+    async def _drain_pending():
         try:
             for rec in bg_jobs.pending_followups():
                 try:
@@ -144,14 +156,9 @@ async def _loop():
                     logger.warning("bg-followup failed for %s (will retry): %s", rec.get("id"), e)
         except Exception as e:
             logger.warning("bg-monitor tick error: %s", e)
-        await asyncio.sleep(POLL_INTERVAL_S)
 
-
-def start_bg_monitor():
-    """Idempotent — start the always-on background-job monitor."""
-    global _monitor_task
-    if _monitor_task and not _monitor_task.done():
-        return _monitor_task
-    _monitor_task = asyncio.create_task(_loop())
+    _monitor_task = schedule_periodic(
+        _drain_pending, POLL_INTERVAL_S, label="bg-monitor", run_immediately=True
+    )
     logger.info("Background-job monitor started (poll %ds)", POLL_INTERVAL_S)
     return _monitor_task

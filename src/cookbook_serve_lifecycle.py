@@ -209,11 +209,20 @@ async def _tick() -> None:
 
 
 async def cookbook_serve_lifecycle_loop() -> None:
-    """Forever-loop. Registered as a startup task in app.py."""
-    await asyncio.sleep(20)  # let the rest of startup settle
-    while True:
+    """Periodic lifecycle maintenance. Registered as a startup task in app.py.
+
+    Uses the PON-compliant event-loop periodic timer (core.pon_timer): the tick
+    is re-armed reactively after an ``asyncio.sleep``, so there is no ``while
+    True`` spin and idle CPU stays ~0% between ticks.
+    """
+    from core.pon_timer import schedule_periodic
+
+    async def _tick_safe():
         try:
             await _tick()
         except Exception as e:
             logger.warning(f"cookbook_serve_lifecycle tick failed: {e}")
-        await asyncio.sleep(60)
+
+    # Let the rest of startup settle before the first tick.
+    return schedule_periodic(_tick_safe, 60, label="cookbook-serve-lifecycle",
+                             initial_delay=20)
