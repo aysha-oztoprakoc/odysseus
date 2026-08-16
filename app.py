@@ -743,7 +743,8 @@ app.include_router(setup_cookbook_routes())
 from routes.workspace_routes import setup_workspace_routes
 from routes.files_routes import setup_files_routes
 app.include_router(setup_workspace_routes())
-app.include_router(setup_files_routes())
+if os.getenv("ODYSSEUS_FILES_ADMIN_ENABLED", "false").lower() == "true":
+    app.include_router(setup_files_routes())
 
 # Hardware model fitting (cookbook "What Fits?" tab)
 from routes.hwfit_routes import setup_hwfit_routes
@@ -1212,7 +1213,12 @@ async def _shutdown_event():
 if __name__ == "__main__":
     import uvicorn
 
+    from core.middleware import gate_auth_disabled_exposed
+
     bind_host = os.getenv("APP_BIND", "127.0.0.1")
     bind_port = int(os.getenv("APP_PORT", "7000"))
+
+    if not gate_auth_disabled_exposed(bind_host):
+        raise SystemExit(1)
 
     uvicorn.run(app, host=bind_host, port=bind_port, log_level="info")

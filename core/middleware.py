@@ -3,6 +3,7 @@
 
 import os
 import secrets
+import sys
 
 from fastapi import HTTPException, Request
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -17,6 +18,94 @@ INTERNAL_TOOL_TOKEN = os.environ.get("ODYSSEUS_INTERNAL_TOKEN") or secrets.token
 INTERNAL_TOOL_HEADER = "X-Odysseus-Internal-Token"
 # Pseudo-username on in-process tool-loopback requests; require_admin trusts it and it is reserved.
 INTERNAL_TOOL_USER = "internal-tool"
+
+
+def is_loopback_bound() -> bool:
+    """True only when the app server is bound to the loopback interface.
+
+    Mirrors the APP_BIND host the ``__main__`` block passes to uvicorn
+    (default ``127.0.0.1``). A server listening on ``0.0.0.0`` / ``::`` /
+    a non-loopback address is network-exposed, and single-operator-style
+    trusts (e.g. "auth unconfigured -> implicit admin", legacy shell tool
+    gating, LOCALHOST_BYPASS) must fail CLOSED there. True for a comma/
+    space-separated binding string only when every entry is a loopback
+    address or ``localhost``.
+    """
+    raw = os.getenv("APP_BIND", "127.0.0.1")
+    # Keep parsing constant-time/shape-stable; this is config, not a secret.
+    entries = [e.strip().lower() for e in raw.replace(",", " ").split() if e.strip()]
+    if not entries:
+        return True  # reset to servant-safe default
+    return all(e in ("127.0.0.1", "::1", "localhost") for e in entries)
+
+
+AUTH_DISABLED_CONFIRM_ENV = "ODYSSEUS_ALLOW_AUTH_DISABLED_EXPOSED"
+
+
+def gate_auth_disabled_exposed(bind_host=None):
+    """Fail-closed deployment gate for ``AUTH_ENABLED=false``.
+
+    Auth-disabled is a legitimate single-user convenience ONLY on loopback.
+    Binding an auth-disabled instance to a non-loopback address would silently
+    expose every route/endpoint without authentication. Rather than start
+    unsafely, this gate refuses to boot unless the operator explicitly
+    confirms the auth-disabled, network-exposed configuration:
+
+    * interactive TTY  -> an explicit yes/no prompt (the "first-run prompt"),
+    * non-interactive  -> the env sentinel
+      ``ODYSSEUS_ALLOW_AUTH_DISABLED_EXPOSED=1`` (best for systemd/docker/CI),
+    * otherwise        -> abort with a clear error (fail closed).
+
+    Loopback-bound auth-disabled startups pass through untouched so single-user
+    local development keeps working. Returns True to proceed, False to abort.
+    """
+    if os.getenv("AUTH_ENABLED", "true").lower() != "false":
+        return True  # auth on; nothing to gate
+
+    host = bind_host if bind_host is not None else os.getenv("APP_BIND", "127.0.0.1")
+    entries = [e.strip().lower() for e in str(host).replace(",", " ").split() if e.strip()]
+    loopback = all(e in ("127.0.0.1", "::1", "localhost") for e in entries) if entries else True
+    if loopback:
+        return True  # safe local single-user mode
+
+    sentinel = os.getenv(AUTH_DISABLED_CONFIRM_ENV, "")
+    if sentinel.strip().lower() in ("1", "true", "yes", "y"):
+        return True
+
+    try:
+        interactive = sys.stdin.isatty()
+    except Exception:
+        interactive = False
+
+    if interactive:
+        print(
+            "\nWARNING: Odyssey is about to start with AUTH_ENABLED=false on a "
+            f"network-exposed interface ({host}). All routes will be UNPROTECTED.\n",
+            file=sys.stderr,
+        )
+        try:
+            answer = input("Type 'DISABLE' to confirm auth-disabled exposed startup: ")
+        except EOFError:
+            answer = ""
+        if answer.strip().lower() == "disable":
+            print("Confirmed. Starting auth-disabled (network-exposed).", file=sys.stderr)
+            return True
+        print(
+            "Aborting: auth-disabled network-exposed startup was not confirmed. "
+            "Set AUTH_ENABLED=true or run loopback-only.",
+            file=sys.stderr,
+        )
+        return False
+
+    print(
+        f"REFUSED to start: AUTH_ENABLED=false is being bound to exposed host {host!r}, "
+        "which would disable authentication for all remote callers. To proceed you "
+        "MUST explicitly confirm this unsafe config by setting "
+        f"{AUTH_DISABLED_CONFIRM_ENV}=1 (non-interactive), answer the prompt on a "
+        "TTY, or run loopback-only.",
+        file=sys.stderr,
+    )
+    return False
 
 
 def is_cors_preflight(method: str, headers) -> bool:
@@ -48,7 +137,14 @@ def require_admin(request: Request):
 
     auth_mgr = getattr(request.app.state, "auth_manager", None)
     if os.getenv("AUTH_ENABLED", "true").lower() == "false":
-        return
+        # Single-user mode is a local development convenience: only loopback
+        # callers may bypass auth. A remote caller hitting an auth-disabled
+        # instance is a misconfiguration and must fail closed (audit residual).
+        client = getattr(request, "client", None)
+        host = (client.host if client else "") or ""
+        if host in ("127.0.0.1", "::1", "localhost"):
+            return
+        raise HTTPException(403, "Auth disabled; remote access denied")
     if not auth_mgr or not auth_mgr.is_configured:
         raise HTTPException(403, "Admin only")
     user = getattr(request.state, "current_user", None)

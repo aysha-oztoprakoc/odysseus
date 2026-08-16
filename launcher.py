@@ -133,6 +133,10 @@ if __name__ == "__main__":
     bind_port = int(os.getenv("APP_PORT", "7000"))
     url = f"http://{bind_host}:{bind_port}"
 
+    from core.middleware import gate_auth_disabled_exposed
+    if not gate_auth_disabled_exposed(bind_host):
+        raise SystemExit(1)
+
     if getattr(sys, 'frozen', False):
         # Start browser manager thread
         threading.Thread(target=open_browser, args=(url,), daemon=True).start()
