@@ -50,3 +50,43 @@ def test_readable_template_injects_nonce(tmp_path):
     body = resp.body.decode("utf-8")
     assert "nonce-abc" in body
     assert "{{CSP_NONCE}}" not in body
+
+
+def test_files_admin_markup_is_removed_by_default(tmp_path, monkeypatch):
+    # Given
+    monkeypatch.delenv("ODYSSEUS_FILES_ADMIN_ENABLED", raising=False)
+    page = tmp_path / "page.html"
+    page.write_text(
+        '<html data-files-admin-enabled="{{FILES_ADMIN_ENABLED}}">'
+        "<!-- FILES_ADMIN_START --><button>Files</button><!-- FILES_ADMIN_END -->"
+        "</html>",
+        encoding="utf-8",
+    )
+
+    # When
+    response = serve_html_with_nonce(_request_with_nonce(), str(page))
+
+    # Then
+    body = response.body.decode("utf-8")
+    assert "<button>Files</button>" not in body
+    assert 'data-files-admin-enabled="false"' in body
+
+
+def test_files_admin_markup_is_present_when_explicitly_enabled(tmp_path, monkeypatch):
+    # Given
+    monkeypatch.setenv("ODYSSEUS_FILES_ADMIN_ENABLED", "true")
+    page = tmp_path / "page.html"
+    page.write_text(
+        '<html data-files-admin-enabled="{{FILES_ADMIN_ENABLED}}">'
+        "<!-- FILES_ADMIN_START --><button>Files</button><!-- FILES_ADMIN_END -->"
+        "</html>",
+        encoding="utf-8",
+    )
+
+    # When
+    response = serve_html_with_nonce(_request_with_nonce(), str(page))
+
+    # Then
+    body = response.body.decode("utf-8")
+    assert "<button>Files</button>" in body
+    assert 'data-files-admin-enabled="true"' in body

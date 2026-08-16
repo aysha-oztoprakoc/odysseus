@@ -1,266 +1,253 @@
-// static/js/filesExplorer.js
-
-import uiModule from './ui.js';
 import * as Modals from './modalManager.js';
+import uiModule from './ui.js';
 
-let currentPath = '/home/amdy';
+const PAGE_SIZE = 100;
+let capability = '';
+let currentPath = '';
+let editingPath = '';
 
-function formatSize(bytes) {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+function element(tag, text, className = '') {
+  const node = document.createElement(tag);
+  node.textContent = text;
+  if (className) node.className = className;
+  return node;
 }
 
-async function loadFiles(path) {
+function button(text, action, className = 'memory-toolbar-btn') {
+  const node = element('button', text, className);
+  node.type = 'button';
+  node.addEventListener('click', action);
+  return node;
+}
+
+function capabilityHeaders(headers = {}) {
+  return { ...headers, 'X-Odysseus-Files-Capability': capability };
+}
+
+async function request(path, options = {}) {
+  const response = await fetch(path, {
+    ...options,
+    headers: capabilityHeaders(options.headers),
+  });
+  if (!response.ok) {
+    if (response.status === 403) lockExplorer();
+    throw new Error(await response.text());
+  }
+  return response;
+}
+
+function lockExplorer() {
+  capability = '';
+  const reauth = document.getElementById('files-reauth');
+  reauth?.classList.remove('hidden');
+  document.getElementById('files-admin-controls')?.classList.add('hidden');
+}
+
+function unlockExplorer() {
+  const reauth = document.getElementById('files-reauth');
+  reauth?.classList.add('hidden');
+  const controls = document.getElementById('files-admin-controls');
+  controls?.classList.remove('hidden');
+}
+
+function formatSize(bytes) {
+  if (!bytes) return '0 B';
+  const units = ['B', 'KiB', 'MiB', 'GiB'];
+  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return `${(bytes / 1024 ** index).toFixed(index ? 1 : 0)} ${units[index]}`;
+}
+
+async function reauthenticate() {
+  const password = document.getElementById('files-reauth-password');
+  const status = document.getElementById('files-reauth-status');
+  if (!(password instanceof HTMLInputElement) || !status) return;
+  status.textContent = '';
   try {
-    const listContainer = document.getElementById('files-list');
-    listContainer.innerHTML = '<div style="opacity:0.5;text-align:center;margin-top:20px;">Loading...</div>';
-    
-    const res = await fetch(`/api/files/browse?path=${encodeURIComponent(path)}`);
-    if (!res.ok) throw new Error(await res.text());
-    
-    const data = await res.json();
+    const response = await fetch('/api/files/capability', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: password.value }),
+    });
+    password.value = '';
+    if (!response.ok) throw new Error('Fresh admin authentication failed');
+    capability = (await response.json()).capability;
+    unlockExplorer();
+    await loadFiles('');
+  } catch (error) {
+    status.textContent = error.message;
+  }
+}
+
+function fileRow(item) {
+  const row = element('div', '', 'memory-item files-admin-row');
+  const open = button(`${item.is_dir ? 'DIR' : 'FILE'}  ${item.name}`, () => {
+    if (item.is_dir) loadFiles(item.path);
+    else openFileEditor(item.path, item.name);
+  });
+  open.classList.add('files-admin-open');
+  const actions = element('div', '', 'files-admin-actions');
+  if (!item.is_dir) {
+    actions.append(element('span', formatSize(item.size)));
+    actions.append(button('Download', () => downloadFile(item.path)));
+  }
+  if (!item.is_dir && /\.(zip|tar|tgz|tar\.gz)$/i.test(item.name)) {
+    actions.append(button('Extract', () => extractArchive(item.path)));
+  }
+  actions.append(button('Delete', () => deletePath(item.path, item.is_dir), 'memory-toolbar-btn danger'));
+  row.append(open, actions);
+  return row;
+}
+
+async function loadFiles(path, offset = 0) {
+  const list = document.getElementById('files-list');
+  if (!list) return;
+  list.replaceChildren(element('div', 'Loading...'));
+  try {
+    const query = new URLSearchParams({ path, limit: String(PAGE_SIZE), offset: String(offset) });
+    const data = await (await request(`/api/files/browse?${query}`)).json();
     currentPath = data.path;
     document.getElementById('files-path-input').value = currentPath;
-    
-    listContainer.innerHTML = '';
-    
-    if (data.parent) {
-      const upDiv = document.createElement('div');
-      upDiv.className = 'memory-item';
-      upDiv.style.cursor = 'pointer';
-      upDiv.innerHTML = `<strong>..</strong>`;
-      upDiv.onclick = () => loadFiles(data.parent);
-      listContainer.appendChild(upDiv);
-    }
-    
-    for (const item of data.items) {
-      const div = document.createElement('div');
-      div.className = 'memory-item';
-      div.style.display = 'flex';
-      div.style.alignItems = 'center';
-      div.style.justifyContent = 'space-between';
-      div.style.padding = '8px';
-      div.style.borderBottom = '1px solid var(--border)';
-      
-      const leftDiv = document.createElement('div');
-      leftDiv.style.display = 'flex';
-      leftDiv.style.alignItems = 'center';
-      leftDiv.style.gap = '8px';
-      leftDiv.style.cursor = 'pointer';
-      
-      let icon = item.is_dir ? '📁' : '📄';
-      if (item.name.endsWith('.zip') || item.name.endsWith('.tar.gz') || item.name.endsWith('.tgz')) {
-        icon = '📦';
-      }
-      
-      leftDiv.innerHTML = `<span>${icon}</span> <span>${item.name}</span>`;
-      leftDiv.onclick = () => {
-        if (item.is_dir) {
-          loadFiles(item.path);
-        } else {
-          openFileEditor(item.path, item.name);
-        }
-      };
-      
-      const rightDiv = document.createElement('div');
-      rightDiv.style.display = 'flex';
-      rightDiv.style.gap = '8px';
-      rightDiv.style.alignItems = 'center';
-      
-      if (!item.is_dir) {
-        const sizeSpan = document.createElement('span');
-        sizeSpan.style.opacity = '0.5';
-        sizeSpan.style.fontSize = '12px';
-        sizeSpan.textContent = formatSize(item.size);
-        rightDiv.appendChild(sizeSpan);
-      }
-      
-      if (icon === '📦') {
-        const extractBtn = document.createElement('button');
-        extractBtn.className = 'memory-toolbar-btn';
-        extractBtn.textContent = 'Extract';
-        extractBtn.onclick = async (e) => {
-          e.stopPropagation();
-          extractArchive(item.path);
-        };
-        rightDiv.appendChild(extractBtn);
-      }
-      
-      if (!item.is_dir) {
-        const downloadBtn = document.createElement('button');
-        downloadBtn.className = 'memory-toolbar-btn';
-        downloadBtn.textContent = 'Download';
-        downloadBtn.onclick = (e) => {
-          e.stopPropagation();
-          window.open(`/api/files/download?path=${encodeURIComponent(item.path)}`, '_blank');
-        };
-        rightDiv.appendChild(downloadBtn);
-      }
-      
-      const delBtn = document.createElement('button');
-      delBtn.className = 'memory-toolbar-btn danger';
-      delBtn.textContent = 'Del';
-      delBtn.onclick = async (e) => {
-        e.stopPropagation();
-        if (confirm(`Delete ${item.name}?`)) {
-          deletePath(item.path);
-        }
-      };
-      rightDiv.appendChild(delBtn);
-      
-      div.appendChild(leftDiv);
-      div.appendChild(rightDiv);
-      listContainer.appendChild(div);
-    }
-  } catch (e) {
-    uiModule.showToast('Error loading files: ' + e.message);
+    const rows = [];
+    if (data.parent) rows.push(button('UP  ..', () => loadFiles(data.parent)));
+    rows.push(...data.items.map(fileRow));
+    if (offset > 0) rows.push(button('Previous', () => loadFiles(currentPath, Math.max(0, offset - PAGE_SIZE))));
+    if (offset + data.items.length < data.total) rows.push(button('Next', () => loadFiles(currentPath, offset + PAGE_SIZE)));
+    list.replaceChildren(...rows);
+  } catch (error) {
+    uiModule.showToast(`Error loading files: ${error.message}`);
   }
 }
 
 async function extractArchive(path) {
   try {
-    const res = await fetch('/api/files/extract', {
+    await request('/api/files/extract', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path })
+      body: JSON.stringify({ path }),
     });
-    if (!res.ok) throw new Error(await res.text());
-    uiModule.showToast('Extracted successfully');
-    loadFiles(currentPath);
-  } catch (e) {
-    uiModule.showToast('Extract failed: ' + e.message);
+    await loadFiles(currentPath);
+  } catch (error) {
+    uiModule.showToast(`Extract failed: ${error.message}`);
   }
 }
 
-async function deletePath(path) {
+async function deletePath(path, recursive) {
+  const prompt = recursive ? `Type the exact path to delete recursively:\n${path}` : `Type the exact path to delete:\n${path}`;
+  if (window.prompt(prompt) !== path) return;
   try {
-    const res = await fetch('/api/files/delete', {
+    await request('/api/files/delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path })
+      body: JSON.stringify({ path, confirm_path: path }),
     });
-    if (!res.ok) throw new Error(await res.text());
-    uiModule.showToast('Deleted successfully');
-    loadFiles(currentPath);
-  } catch (e) {
-    uiModule.showToast('Delete failed: ' + e.message);
+    await loadFiles(currentPath);
+  } catch (error) {
+    uiModule.showToast(`Delete failed: ${error.message}`);
   }
 }
 
-let editingPath = null;
+async function downloadFile(path) {
+  try {
+    const response = await request(`/api/files/download?path=${encodeURIComponent(path)}`);
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(await response.blob());
+    link.download = path.split('/').pop();
+    link.click();
+    URL.revokeObjectURL(link.href);
+  } catch (error) {
+    uiModule.showToast(`Download failed: ${error.message}`);
+  }
+}
+
 async function openFileEditor(path, name) {
   try {
-    const res = await fetch(`/api/files/read?path=${encodeURIComponent(path)}`);
-    if (!res.ok) throw new Error(await res.text());
-    const data = await res.json();
-    
+    const data = await (await request(`/api/files/read?path=${encodeURIComponent(path)}`)).json();
     editingPath = path;
     document.getElementById('files-list').style.display = 'none';
     document.getElementById('files-editor-container').style.display = 'flex';
     document.getElementById('files-editor-name').textContent = name;
     document.getElementById('files-editor-textarea').value = data.content;
-  } catch (e) {
-    uiModule.showToast('Read failed: ' + e.message);
+  } catch (error) {
+    uiModule.showToast(`Read failed: ${error.message}`);
   }
 }
 
 async function saveFileEditor() {
   if (!editingPath) return;
   try {
-    const content = document.getElementById('files-editor-textarea').value;
-    const res = await fetch('/api/files/write', {
+    await request('/api/files/write', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: editingPath, content })
+      body: JSON.stringify({ path: editingPath, content: document.getElementById('files-editor-textarea').value }),
     });
-    if (!res.ok) throw new Error(await res.text());
     uiModule.showToast('File saved');
-  } catch (e) {
-    uiModule.showToast('Save failed: ' + e.message);
+  } catch (error) {
+    uiModule.showToast(`Save failed: ${error.message}`);
   }
 }
 
 function closeFileEditor() {
-  editingPath = null;
+  editingPath = '';
   document.getElementById('files-editor-container').style.display = 'none';
   document.getElementById('files-list').style.display = 'block';
-  loadFiles(currentPath);
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+async function uploadFile(input) {
+  if (!input.files.length) return;
+  const form = new FormData();
+  form.append('file', input.files[0]);
+  try {
+    await request(`/api/files/upload?dir_path=${encodeURIComponent(currentPath)}`, { method: 'POST', body: form });
+    await loadFiles(currentPath);
+  } catch (error) {
+    uiModule.showToast(`Upload failed: ${error.message}`);
+  } finally {
+    input.value = '';
+  }
+}
+
+function initialize() {
   const modal = document.getElementById('files-modal');
   if (!modal) return;
-  
-  Modals.register('files-modal', () => {
-    modal.classList.remove('hidden');
-    loadFiles(currentPath);
-  }, () => {
+  const closeFiles = () => {
+    capability = '';
+    modal.style.display = 'none';
     modal.classList.add('hidden');
-  });
-
-  const railBtn = document.getElementById('rail-files');
-  if (railBtn) {
-    railBtn.addEventListener('click', () => {
-      Modals.open('files-modal');
+  };
+  const openFiles = () => {
+    if (!modal.classList.contains('hidden')) return;
+    modal.classList.remove('hidden', 'modal-minimized');
+    modal.style.display = 'flex';
+    lockExplorer();
+    Modals.register('files-modal', {
+      railBtnId: 'rail-files',
+      sidebarBtnId: 'tool-files-btn',
+      restoreFn: () => {},
+      closeFn: closeFiles,
+    });
+  };
+  for (const id of ['rail-files', 'tool-files-btn']) {
+    document.getElementById(id)?.addEventListener('click', () => {
+      if (!Modals.toggle('files-modal')) openFiles();
     });
   }
-  
-  const sidebarBtn = document.getElementById('tool-files-btn');
-  if (sidebarBtn) {
-    sidebarBtn.addEventListener('click', () => {
-      Modals.open('files-modal');
-    });
-  }
-  
   document.getElementById('close-files-modal')?.addEventListener('click', () => {
-    Modals.close('files-modal');
+    if (Modals.isRegistered('files-modal')) Modals.close('files-modal');
+    else closeFiles();
   });
-  
-  document.getElementById('files-go-btn')?.addEventListener('click', () => {
-    const path = document.getElementById('files-path-input').value;
-    loadFiles(path);
+  document.getElementById('files-reauth-btn')?.addEventListener('click', reauthenticate);
+  document.getElementById('files-go-btn')?.addEventListener('click', () => loadFiles(document.getElementById('files-path-input').value));
+  document.getElementById('files-up-btn')?.addEventListener('click', () => loadFiles(`${currentPath}/..`));
+  const upload = document.getElementById('files-upload-input');
+  upload?.addEventListener('change', () => uploadFile(upload));
+  document.getElementById('files-upload-btn')?.addEventListener('click', () => upload?.click());
+  document.getElementById('files-path-input')?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') loadFiles(event.target.value);
   });
-  
-  
-  document.getElementById('files-up-btn')?.addEventListener('click', () => {
-    loadFiles(currentPath + '/..');
-  });
-  
-  const uploadInput = document.getElementById('files-upload-input');
-  if (uploadInput) {
-    uploadInput.addEventListener('change', async (e) => {
-      if (!e.target.files.length) return;
-      const file = e.target.files[0];
-      const formData = new FormData();
-      formData.append('file', file);
-      
-      try {
-        const res = await fetch(`/api/files/upload?dir_path=${encodeURIComponent(currentPath)}`, {
-          method: 'POST',
-          body: formData
-        });
-        if (!res.ok) throw new Error(await res.text());
-        uiModule.showToast('Uploaded successfully');
-        loadFiles(currentPath);
-      } catch (err) {
-        uiModule.showToast('Upload failed: ' + err.message);
-      } finally {
-        e.target.value = '';
-      }
-    });
-  }
-  
-  document.getElementById('files-upload-btn')?.addEventListener('click', () => {
-    uploadInput?.click();
-  });
-  
-  document.getElementById('files-path-input')?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') loadFiles(e.target.value);
-  });
-  
   document.getElementById('files-editor-save')?.addEventListener('click', saveFileEditor);
   document.getElementById('files-editor-close')?.addEventListener('click', closeFileEditor);
-});
+  document.documentElement.dataset.filesAdminReady = 'true';
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initialize);
+else initialize();

@@ -1,0 +1,34 @@
+{
+  "enabled": {
+    "capability_accepted": true,
+    "dialogs": [],
+    "hostile_filename_text": true,
+    "injected_images": 0,
+    "page_errors": [],
+    "safe_file_content": true,
+    "screenshot": "/home/amdy/data_rein/odysseus/.qa_runtime/files-enabled-admin.png"
+  },
+  "viewports": [
+    {
+      "files_controls": 0,
+      "page_errors": [],
+      "screenshot": "/home/amdy/data_rein/odysseus/.qa_runtime/files-disabled-375.png",
+      "secret_ui": false,
+      "width": 375
+    },
+    {
+      "files_controls": 0,
+      "page_errors": [],
+      "screenshot": "/home/amdy/data_rein/odysseus/.qa_runtime/files-disabled-768.png",
+      "secret_ui": false,
+      "width": 768
+    },
+    {
+      "files_controls": 0,
+      "page_errors": [],
+      "screenshot": "/home/amdy/data_rein/odysseus/.qa_runtime/files-disabled-1280.png",
+      "secret_ui": false,
+      "width": 1280
+    }
+  ]
+}

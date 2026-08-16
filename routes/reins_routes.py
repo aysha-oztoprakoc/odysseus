@@ -1,387 +1,183 @@
-"""
-Dashboard routes surfacing the data_rein harness (wiki, task trail, model
-router, token budgets) inside Odysseus - see `integrations/reins/mcp_client.py`
-for how these reach the harness (streamable-HTTP MCP, not an in-process
-import). Admin-only, same as the other operationally-sensitive routes
-(shell exec, admin wipe) in this app.
-"""
+from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Any, Annotated
 
-import subprocess
-
-from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+import httpx
+from fastapi import APIRouter, HTTPException, Path as ApiPath, Request
+from pydantic import BaseModel, ConfigDict, Field
 
 from core.middleware import require_admin
 from integrations.reins.mcp_client import call_tool
+from routes.reins_wiki_routes import setup_reins_wiki_routes
+
 
 logger = logging.getLogger(__name__)
-
-# Host state directory for the omnigent web UI, bind-mounted read-only in
-# docker-compose.yml (`${HOME}/.omnigent:/host-omnigent:ro`).
 OMNIGENT_STATE_DIR = Path("/host-omnigent")
 
 
-class BudgetIn(BaseModel):
-    cpu_pct: Optional[int] = None
-    gpu_vram_gb: Optional[float] = None
+class BudgetInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    cpu_pct: int | None = Field(default=None, ge=1, le=100)
+    gpu_vram_gb: float | None = Field(default=None, ge=0, le=1024)
+
+
+class ModelInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    model: str = Field(min_length=1, max_length=500)
+
+
+class DatasetExportInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    out_path: str = Field(min_length=1, max_length=4096)
+    categories: str = Field(default="", max_length=4096)
+    modality: str = Field(default="", max_length=100)
+    kind: str = Field(default="completion", pattern="^(completion|memories)$")
+    min_chars: int = Field(default=64, ge=1, le=1_000_000)
+    limit: int = Field(default=0, ge=0, le=1_000_000)
+
+
+class DigestInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    path: str = Field(min_length=1, max_length=4096)
 
 
 def setup_reins_routes() -> APIRouter:
     router = APIRouter(prefix="/api/reins", tags=["reins"])
 
-    @router.get("/trail")
-    async def trail(request: Request, status: str = ""):
-        require_admin(request)
+    async def call(name: str, **kwargs: Any) -> Any:
         try:
-            return await call_tool("trail_list", status=status)
-        except Exception as e:
-            logger.error(f"reins trail_list failed: {e}")
-            raise HTTPException(502, f"harness unreachable: {e}")
+            return await call_tool(name, **kwargs)
+        except Exception as error:
+            logger.error("reins tool failed", extra={"tool": name, "error_type": type(error).__name__})
+            raise HTTPException(502, "Harness unreachable") from error
+
+    @router.get("/trail")
+    async def trail(request: Request, status: str = "") -> Any:
+        require_admin(request)
+        return await call("trail_list", status=status)
 
     @router.get("/agents")
-    async def agents(request: Request):
+    async def agents(request: Request) -> dict[str, Any]:
         require_admin(request)
-        try:
-            status = await call_tool("agent_status")
-            budgets = await call_tool("agent_budgets")
-            return {"status": status, "budgets": budgets}
-        except Exception as e:
-            logger.error(f"reins agent status/budgets failed: {e}")
-            raise HTTPException(502, f"harness unreachable: {e}")
+        return {"status": await call("agent_status"), "budgets": await call("agent_budgets")}
 
     @router.post("/agents/{name}/budget")
-    async def set_budget(name: str, body: BudgetIn, request: Request):
+    async def set_budget(request: Request, name: str, body: BudgetInput) -> Any:
         require_admin(request)
-        try:
-            return await call_tool(
-                "set_agent_budget",
-                agent_name=name,
-                cpu_pct=body.cpu_pct if body.cpu_pct is not None else -1,
-                gpu_vram_gb=body.gpu_vram_gb if body.gpu_vram_gb is not None else -1.0,
-            )
-        except Exception as e:
-            logger.error(f"reins set_agent_budget failed: {e}")
-            raise HTTPException(502, f"harness unreachable: {e}")
-
-    @router.get("/wiki/search")
-    async def wiki_search(request: Request, q: str, limit: int = 8):
-        require_admin(request)
-        try:
-            return await call_tool("wiki_search", query=q, limit=limit)
-        except Exception as e:
-            logger.error(f"reins wiki_search failed: {e}")
-            raise HTTPException(502, f"harness unreachable: {e}")
+        return await call(
+            "set_agent_budget",
+            agent_name=name,
+            cpu_pct=body.cpu_pct if body.cpu_pct is not None else -1,
+            gpu_vram_gb=body.gpu_vram_gb if body.gpu_vram_gb is not None else -1.0,
+        )
 
     @router.get("/tokens")
-    async def tokens(request: Request, provider: str = ""):
+    async def tokens(request: Request, provider: str = "") -> Any:
         require_admin(request)
-        try:
-            return await call_tool("token_usage_status", provider=provider)
-        except Exception as e:
-            logger.error(f"reins token_usage_status failed: {e}")
-            raise HTTPException(502, f"harness unreachable: {e}")
+        return await call("token_usage_status", provider=provider)
 
     @router.get("/omnigent/status")
-    async def omnigent_status(request: Request):
+    async def omnigent_status(request: Request) -> dict[str, Any]:
         require_admin(request)
-        pid_file = OMNIGENT_STATE_DIR / "local_server.pid"
         try:
-            lines = pid_file.read_text(encoding="utf-8").splitlines()
+            lines = (OMNIGENT_STATE_DIR / "local_server.pid").read_text(encoding="utf-8").splitlines()
             port = int(lines[1].strip())
-        except Exception:
+        except (OSError, ValueError, IndexError):
             return {"reachable": False, "port": None}
-
-        import httpx
-
         try:
             async with httpx.AsyncClient(timeout=1.5) as client:
-                resp = await client.get(f"http://host.docker.internal:{port}/health")
-                reachable = resp.status_code == 200
-        except Exception:
+                response = await client.get(f"http://host.docker.internal:{port}/health")
+            reachable = response.status_code == 200
+        except httpx.HTTPError:
             reachable = False
         return {"reachable": reachable, "port": port}
 
-    class LoadModelIn(BaseModel):
-        model: str
-
     @router.get("/coord/status")
-    async def coord_status(request: Request):
+    async def coord_status(request: Request) -> Any:
         require_admin(request)
-        try:
-            return await call_tool("coord_status")
-        except Exception as e:
-            logger.error(f"reins coord_status failed: {e}")
-            raise HTTPException(502, f"harness unreachable: {e}")
+        return await call("coord_status")
 
     @router.post("/coord/load")
-    async def coord_load(request: Request, body: LoadModelIn):
+    async def coord_load(request: Request, body: ModelInput) -> Any:
         require_admin(request)
-        try:
-            return await call_tool("coord_load", model=body.model)
-        except Exception as e:
-            logger.error(f"reins coord_load failed: {e}")
-            raise HTTPException(502, f"harness unreachable: {e}")
+        return await call("coord_load", model=body.model)
 
     @router.post("/coord/unload")
-    async def coord_unload(request: Request, body: LoadModelIn):
+    async def coord_unload(request: Request, body: ModelInput) -> Any:
         require_admin(request)
-        try:
-            return await call_tool("coord_unload", model=body.model)
-        except Exception as e:
-            logger.error(f"reins coord_unload failed: {e}")
-            raise HTTPException(502, f"harness unreachable: {e}")
+        return await call("coord_unload", model=body.model)
 
     @router.get("/hardware/scan")
-    async def hardware_scan(request: Request):
+    async def hardware_scan(request: Request) -> Any:
         require_admin(request)
-        try:
-            return await call_tool("hardware_scan")
-        except Exception as e:
-            logger.error(f"reins hardware_scan failed: {e}")
-            raise HTTPException(502, f"harness unreachable: {e}")
+        return await call("hardware_scan")
 
     @router.get("/hardware/gaps")
-    async def hardware_gaps(request: Request):
+    async def hardware_gaps(request: Request) -> Any:
         require_admin(request)
-        try:
-            return await call_tool("hardware_gaps")
-        except Exception as e:
-            logger.error(f"reins hardware_gaps failed: {e}")
-            raise HTTPException(502, f"harness unreachable: {e}")
-
-    class DatasetExportIn(BaseModel):
-        out_path: str
-        categories: str = ""
-        modality: str = ""
-        kind: str = "completion"
-        min_chars: int = 64
-        limit: int = 0
+        return await call("hardware_gaps")
 
     @router.post("/dataset/export")
-    async def dataset_export(request: Request, body: DatasetExportIn):
+    async def dataset_export(request: Request, body: DatasetExportInput) -> Any:
         require_admin(request)
-        try:
-            return await call_tool("dataset_export", **body.model_dump())
-        except Exception as e:
-            logger.error(f"reins dataset_export failed: {e}")
-            raise HTTPException(502, f"harness unreachable: {e}")
+        return await call("dataset_export", **body.model_dump())
 
     @router.get("/train/status")
-    async def train_status(request: Request):
+    async def train_status(request: Request) -> Any:
         require_admin(request)
-        try:
-            return await call_tool("train_status")
-        except Exception as e:
-            logger.error(f"reins train_status failed: {e}")
-            raise HTTPException(502, f"harness unreachable: {e}")
+        return await call("train_status")
 
     @router.get("/system/directive")
-    async def system_directive(request: Request):
+    async def system_directive(request: Request) -> Any:
         require_admin(request)
-        try:
-            from reins.harness import paths
-            text = paths.prime_directive().read_text(encoding="utf-8")
-            return {"content": text}
-        except Exception as e:
-            logger.error(f"system_directive failed: {e}")
-            raise HTTPException(502, f"Failed to read directive: {e}")
+        return await call("system_directive")
 
     @router.get("/system/paths")
-    async def system_paths(request: Request):
+    async def system_paths(request: Request) -> Any:
         require_admin(request)
-        try:
-            from reins.harness import paths
-            return {
-                "home": str(paths.home()),
-                "wiki": str(paths.wiki_db()),
-                "trail": str(paths.task_trail()),
-                "config": str(paths.config_dir()),
-                "models": str(paths.model_registry()),
-            }
-        except Exception as e:
-            logger.error(f"system_paths failed: {e}")
-            raise HTTPException(502, f"Failed to get paths: {e}")
+        return await call("system_paths")
 
-    class SecretIn(BaseModel):
-        name: str
-        password: str
-
-    @router.post("/system/secret")
-    async def system_secret(request: Request, body: SecretIn):
+    @router.get("/cli/{cmd}", status_code=202)
+    async def queue_cli(
+        request: Request,
+        cmd: Annotated[str, ApiPath(pattern="^(models|ody|bin|local)$")],
+    ) -> dict[str, Any]:
         require_admin(request)
-        # Verify password against admin secret
-        try:
-            from scripts.get_secrets import get_secret
-            
-            # Simple password check against a known secret or hardcoded stub
-            # In a real app we'd verify against a hash, here we just require it's not empty
-            if not body.password:
-                raise HTTPException(401, "Password required")
-                
-            val = get_secret(body.name)
-            return {"secret": val}
-        except Exception as e:
-            logger.error(f"system_secret failed: {e}")
-            raise HTTPException(502, f"Failed to get secret: {e}")
+        suffix = {"models": "", "ody": " status", "bin": " list", "local": " status"}[cmd]
+        result = await call(
+            "trail_queue",
+            goal=f"Run reins {cmd}{suffix} and record the bounded result",
+            context="Requested by the Odysseus admin dashboard",
+            task_type=f"odysseus:cli:{cmd}",
+            node="amdy",
+        )
+        return {"operation_id": result["task_id"]}
 
-    @router.get("/wiki/pages")
-    async def wiki_list_pages(request: Request, category: Optional[str] = None, owner: Optional[str] = None, limit: int = 50, offset: int = 0):
+    @router.post("/cli/digest", status_code=202)
+    async def queue_digest(request: Request, body: DigestInput) -> dict[str, Any]:
         require_admin(request)
-        try:
-            from reins.harness.wiki import WikiDB
-            with WikiDB() as db:
-                pages = db.list_pages(category=category, owner=owner, limit=limit, offset=offset)
-                return [dict(p) for p in pages]
-        except Exception as e:
-            logger.error(f"wiki list_pages failed: {e}")
-            raise HTTPException(502, f"wiki unreachable: {e}")
+        result = await call(
+            "trail_queue",
+            goal=f"Run reins digest for the selected path: {body.path}",
+            context="Requested by the Odysseus admin dashboard",
+            task_type="odysseus:cli:digest",
+            node="amdy",
+        )
+        return {"operation_id": result["task_id"]}
 
-    @router.get("/wiki/pages/{slug}")
-    async def wiki_get_page(request: Request, slug: str):
+    @router.post("/cli/backup", status_code=202)
+    async def queue_backup(request: Request) -> dict[str, Any]:
         require_admin(request)
-        try:
-            from reins.harness.wiki import WikiDB
-            with WikiDB() as db:
-                page = db.get_page(slug)
-                if not page:
-                    raise HTTPException(404, "Page not found")
-                return dict(page)
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.error(f"wiki get_page failed: {e}")
-            raise HTTPException(502, f"wiki unreachable: {e}")
+        result = await call(
+            "trail_queue",
+            goal="Run reins backup and record the bounded result",
+            context="Requested by the Odysseus admin dashboard",
+            task_type="odysseus:cli:backup",
+            node="amdy",
+        )
+        return {"operation_id": result["task_id"]}
 
-    class PageIn(BaseModel):
-        title: str
-        content: str
-        category: str = "general"
-        fmt: str = "md"
-        metadata_json: str = "{}"
-
-    @router.post("/wiki/pages")
-    @router.put("/wiki/pages/{slug}")
-    async def wiki_upsert_page(request: Request, body: PageIn, slug: Optional[str] = None):
-        require_admin(request)
-        try:
-            from reins.harness.wiki import WikiDB
-            with WikiDB() as db:
-                new_slug = db.upsert_page(
-                    title=body.title,
-                    content=body.content,
-                    slug=slug,
-                    category=body.category,
-                    fmt=body.fmt,
-                    metadata_json=body.metadata_json,
-                    owner="harness"
-                )
-                return {"slug": new_slug}
-        except Exception as e:
-            logger.error(f"wiki upsert_page failed: {e}")
-            raise HTTPException(502, f"wiki unreachable: {e}")
-
-    @router.get("/wiki/memories")
-    async def wiki_list_memories(request: Request, limit: int = 50, offset: int = 0):
-        require_admin(request)
-        try:
-            from reins.harness.wiki import WikiDB
-            with WikiDB() as db:
-                cur = db.conn.execute("SELECT * FROM memories ORDER BY timestamp DESC LIMIT ? OFFSET ?", (limit, offset))
-                return [dict(r) for r in cur.fetchall()]
-        except Exception as e:
-            logger.error(f"wiki list_memories failed: {e}")
-            raise HTTPException(502, f"wiki unreachable: {e}")
-
-    class MemoryIn(BaseModel):
-        text: str
-        category: str = "general"
-
-    @router.post("/wiki/memories")
-    async def wiki_upsert_memory(request: Request, body: MemoryIn):
-        require_admin(request)
-        try:
-            from reins.harness.wiki import WikiDB
-            with WikiDB() as db:
-                uid = db.add_memory(text=body.text, category=body.category, owner="harness")
-                return {"uid": uid}
-        except Exception as e:
-            logger.error(f"wiki upsert_memory failed: {e}")
-            raise HTTPException(502, f"wiki unreachable: {e}")
-
-    @router.delete("/wiki/pages/{slug}")
-    async def wiki_delete_page(request: Request, slug: str):
-        require_admin(request)
-        try:
-            from reins.harness.wiki import WikiDB
-            with WikiDB() as db:
-                with db._tx():
-                    db.conn.execute("DELETE FROM pages WHERE slug = ?", (slug,))
-                return {"ok": True}
-        except Exception as e:
-            logger.error(f"wiki delete_page failed: {e}")
-            raise HTTPException(502, f"wiki unreachable: {e}")
-
-    @router.delete("/wiki/memories/{uid}")
-    async def wiki_delete_memory(request: Request, uid: str):
-        require_admin(request)
-        try:
-            from reins.harness.wiki import WikiDB
-            with WikiDB() as db:
-                with db._tx():
-                    db.conn.execute("DELETE FROM memories WHERE uid = ?", (uid,))
-                return {"ok": True}
-        except Exception as e:
-            logger.error(f"wiki delete_memory failed: {e}")
-            raise HTTPException(502, f"wiki unreachable: {e}")
-
-    # --- CLI Mirror Endpoints ---
-
-    @router.get("/cli/{cmd}")
-    async def run_cli_cmd(request: Request, cmd: str):
-        require_admin(request)
-        allowed = {"models", "ody", "bin", "local"}
-        if cmd not in allowed:
-            raise HTTPException(400, "Command not allowed")
-        
-        args = ["reins", cmd]
-        if cmd in {"ody", "local", "bin"}:
-            if cmd == "bin":
-                args.append("list")
-            else:
-                args.append("status")
-                
-        try:
-            result = subprocess.run(args, capture_output=True, text=True, check=False)
-            return {"output": result.stdout if result.returncode == 0 else result.stderr}
-        except Exception as e:
-            logger.error(f"reins cli {cmd} failed: {e}")
-            raise HTTPException(502, f"CLI unreachable: {e}")
-
-    class DigestIn(BaseModel):
-        path: str
-
-    @router.post("/cli/digest")
-    async def run_cli_digest(request: Request, body: DigestIn):
-        require_admin(request)
-        try:
-            result = subprocess.run(["reins", "digest", body.path], capture_output=True, text=True, check=False)
-            return {"output": result.stdout if result.returncode == 0 else result.stderr}
-        except Exception as e:
-            logger.error(f"reins cli digest failed: {e}")
-            raise HTTPException(502, f"CLI unreachable: {e}")
-
-    @router.post("/cli/backup")
-    async def run_cli_backup(request: Request):
-        require_admin(request)
-        try:
-            result = subprocess.run(["reins", "backup"], capture_output=True, text=True, check=False)
-            return {"output": result.stdout if result.returncode == 0 else result.stderr}
-        except Exception as e:
-            logger.error(f"reins cli backup failed: {e}")
-            raise HTTPException(502, f"CLI unreachable: {e}")
-
+    router.include_router(setup_reins_wiki_routes(call, require_admin))
     return router

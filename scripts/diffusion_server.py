@@ -154,6 +154,9 @@ def load_model():
 
     logger.info(f"Loading model from {model_path} (dtype={_args.dtype}, offload={use_offload})...")
 
+    # Optional fixed HF revision pin for reproducible hub/from_pretrained pulls.
+    _rev = getattr(_args, "revision", None)
+
     # Ensure HF token is available for gated repos
     _hf_token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
     if _hf_token:
@@ -211,9 +214,13 @@ def load_model():
         """Try loading pipeline, handling meta tensor issues."""
         global _pipe
 
+        _pp_kwargs = dict(torch_dtype=torch_dtype)
+        if _rev:
+            _pp_kwargs["revision"] = _rev
+
         # First try normal load
         try:
-            _pipe = cls.from_pretrained(model_path, torch_dtype=torch_dtype)
+            _pipe = cls.from_pretrained(model_path, **_pp_kwargs)
         except Exception as e:
             logger.warning(f"{name} from_pretrained failed: {e}")
             _pipe = None
@@ -251,7 +258,7 @@ def load_model():
         # OOM — reload and try with CPU offload
         try:
             logger.info(f"Reloading {name} with CPU offload...")
-            _pipe = cls.from_pretrained(model_path, torch_dtype=torch_dtype)
+            _pipe = cls.from_pretrained(model_path, **_pp_kwargs)
             _fix_meta_tensors(_pipe, torch_dtype)
             _pipe.enable_model_cpu_offload()
             logger.info(f"Loaded as {name} with CPU offload")
@@ -264,7 +271,7 @@ def load_model():
         # Last resort — sequential offload
         try:
             logger.info(f"Reloading {name} with sequential CPU offload...")
-            _pipe = cls.from_pretrained(model_path, torch_dtype=torch_dtype)
+            _pipe = cls.from_pretrained(model_path, **_pp_kwargs)
             _fix_meta_tensors(_pipe, torch_dtype)
             _pipe.enable_sequential_cpu_offload()
             logger.info(f"Loaded as {name} with sequential CPU offload")
@@ -305,7 +312,7 @@ def load_model():
             target = sf_files[0] if sf_files else (ckpt_files[0] if ckpt_files else None)
             if target:
                 logger.info(f"Downloading single file: {target}")
-                single_file = hf_hub_download(model_path, target)
+                single_file = hf_hub_download(model_path, target, revision=_rev) if _rev else hf_hub_download(model_path, target)
         except Exception as e:
             logger.warning(f"Could not list repo files for single-file fallback: {e}")
         # Also check local path
@@ -363,14 +370,14 @@ def load_model():
             # Pre-download config files (json/txt only) so from_single_file doesn't choke
             def _ensure_config_local(repo_id):
                 """Download only config files from a repo, return local path or None."""
+                _snap = dict(token=_hf_token, local_files_only=False, revision=_rev) if _rev else dict(token=_hf_token, local_files_only=False)
                 try:
                     from huggingface_hub import snapshot_download
                     local = snapshot_download(
                         repo_id,
                         allow_patterns=["*.json", "*.txt", "**/*.json", "**/*.txt"],
                         ignore_patterns=["*.safetensors", "*.bin", "*.ckpt", "*.pt", "*.msgpack", "*.h5", "*.onnx", "*.png", "*.jpg", "*.md"],
-                        token=_hf_token,
-                        local_files_only=False,
+                        **_snap,
                     )
                     logger.info(f"Config files cached for {repo_id} at {local}")
                     return local
@@ -382,8 +389,7 @@ def load_model():
                         local = _sd2(
                             repo_id,
                             ignore_patterns=["*.safetensors", "*.bin", "*.ckpt", "*.pt", "*.msgpack", "*.h5", "*.onnx"],
-                            token=_hf_token,
-                            local_files_only=False,
+                            **_snap,
                         )
                         logger.info(f"Config files cached (no filter) for {repo_id} at {local}")
                         return local
@@ -1133,6 +1139,11 @@ def health():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", required=True, help="Path to diffusers model")
+    parser.add_argument("--revision", default=None,
+        help="Pin any HuggingFace Hub download / from_pretrained() to a fixed "
+             "git ref (branch, tag, or 40-hex commit SHA). Unpinned hub pulls "
+             "track the repo default branch, which is supply-chain malleable; "
+             "pin for reproducible inference. Ignored for local paths.")
     parser.add_argument("--lora", type=str, default=None, help="Path to LoRA weights (.safetensors). Can specify multiple comma-separated.")
     parser.add_argument("--lora-scale", type=float, default=1.0, help="LoRA weight scale (0.0-2.0)")
     parser.add_argument("--port", type=int, default=8100)

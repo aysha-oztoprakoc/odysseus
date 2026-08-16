@@ -65,9 +65,146 @@
   --select-option-bg: color-mix(in srgb, var(--panel) 74%, var(--bg));
   --select-option-fg: var(--fg);
   --select-option-active-bg: color-mix(in srgb, var(--accent, var(--red)) 24%, var(--panel));
+  /* Files Admin component scale. Keep its high-risk controls consistent and
+     responsive without duplicating layout dimensions in markup or scripts. */
+  --files-admin-gap: 8px;
+  --files-admin-space: 16px;
+  --files-admin-inline-size: 800px;
+  --files-admin-block-size: 80dvh;
   /* Warm accent — used by the Goals/Today UI in Notes. Lives as a token so
      themes can override without touching the goal CSS. */
   --accent-warm: #d19a66;
+}
+
+/* ── Files Admin primitives ── */
+.files-admin-modal-content {
+  width: min(var(--files-admin-inline-size), 95vw);
+  height: var(--files-admin-block-size);
+  display: flex;
+  flex-direction: column;
+}
+.files-admin-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+.files-admin-reauth {
+  display: flex;
+  flex-direction: column;
+  gap: var(--files-admin-gap);
+  padding: var(--files-admin-space);
+}
+.files-admin-reauth.hidden,
+.files-admin-controls.hidden { display: none; }
+.files-admin-reauth-copy {
+  font-size: 12px;
+  opacity: 0.75;
+}
+.files-admin-reauth-action { align-self: flex-start; }
+.files-admin-status {
+  font-size: 12px;
+  color: var(--red);
+}
+.files-admin-controls {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.files-admin-toolbar {
+  display: flex;
+  gap: var(--files-admin-gap);
+  padding: var(--files-admin-gap);
+  border-bottom: 1px solid var(--border);
+}
+.files-admin-path {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.files-admin-upload { margin-left: var(--files-admin-gap); }
+.files-admin-list {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: var(--files-admin-gap);
+}
+.files-admin-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--files-admin-gap);
+  padding: var(--files-admin-gap);
+  border-bottom: 1px solid var(--border);
+}
+.files-admin-open {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.files-admin-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--files-admin-gap);
+}
+.files-admin-editor {
+  display: none;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+}
+.files-admin-editor-header {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--files-admin-gap);
+  padding: 4px var(--files-admin-gap);
+  background: var(--bg-secondary);
+}
+.files-admin-editor-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: bold;
+}
+.files-admin-editor-text {
+  flex: 1;
+  width: 100%;
+  resize: none;
+  background: var(--input-bg);
+  color: var(--fg);
+  border: 0;
+  padding: var(--files-admin-gap);
+  font-family: monospace;
+  outline: none;
+}
+
+@media (max-width: 480px) {
+  .files-admin-modal-content {
+    width: calc(100vw - 16px);
+    height: calc(100dvh - 16px);
+  }
+  .files-admin-toolbar { flex-wrap: wrap; }
+  .files-admin-path {
+    flex-basis: 100%;
+    order: -1;
+  }
+  .files-admin-upload { margin-left: 0; }
+  .files-admin-row { grid-template-columns: minmax(0, 1fr); }
+  .files-admin-actions { flex-wrap: wrap; }
 }
 
 :root.light {

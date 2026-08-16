@@ -27,7 +27,6 @@ import harnessModule from './js/harness.js';
 import calendarModule from './js/calendar.js';
 import notesModule from './js/notes.js';
 import adminModule from './js/admin.js';
-import filesExplorerModule from './js/filesExplorer.js';
 import settingsModule from './js/settings.js';
 // Eagerly bind unified minimize/restore behavior across all tool modals.
 import './js/modalManager.js';
@@ -54,6 +53,10 @@ window.sessionModule = sessionModule;
 window.uiModule = uiModule;
 window.adminModule = adminModule;
 window.cookbookModule = cookbookModule;
+
+if (document.documentElement.dataset.filesAdminEnabled === 'true') {
+  import('./js/filesExplorer.js');
+}
 
 function initForegroundActivityHeartbeat() {
   let lastSent = 0;
@@ -4146,7 +4149,7 @@ function startOdysseusApp() {
 
   // Section collapse/expand + drag reorder (extracted to js/section-management.js)
   initSectionCollapse(Storage);
-  initSectionDrag(Storage, loadUIVis);
+  initSectionDrag(Storage, window.loadUIVis);
   
   // Handle drag over and out for individual sections
   const sections = document.querySelectorAll('.section[draggable="true"]');

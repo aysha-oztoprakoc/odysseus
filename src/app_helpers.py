@@ -2,6 +2,7 @@
 import base64
 import logging
 import os
+import re
 
 from fastapi import HTTPException
 from fastapi.responses import HTMLResponse
@@ -46,6 +47,15 @@ def serve_html_with_nonce(request: Request, file_path: str) -> HTMLResponse:
         raise HTTPException(500, "Internal server error")
     nonce = getattr(request.state, "csp_nonce", "")
     html = html.replace("{{CSP_NONCE}}", nonce)
+    files_admin_enabled = os.getenv("ODYSSEUS_FILES_ADMIN_ENABLED", "false").lower() == "true"
+    html = html.replace("{{FILES_ADMIN_ENABLED}}", str(files_admin_enabled).lower())
+    if not files_admin_enabled:
+        html = re.sub(
+            r"<!-- FILES_ADMIN_START -->.*?<!-- FILES_ADMIN_END -->",
+            "",
+            html,
+            flags=re.DOTALL,
+        )
     return HTMLResponse(html)
 
 

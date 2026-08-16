@@ -2,7 +2,11 @@
 """Download HuggingFace models with clean pipe-friendly progress output.
 
 Usage:
-    python3 scripts/hf_download.py <repo_id> [--include "pattern"]
+    python3 scripts/hf_download.py <repo_id> [--include "pattern"] [--revision <ref>]
+
+Pin downloads to a fixed HF revision with --revision (branch, tag, or a
+40-hex commit SHA) for reproducible, auditable model pulls; an unpinned
+download tracks the repo's default branch (supply-chain malleable).
 
 Prints lines like:
     FILE model.safetensors [########------------] 42% 1.23/2.91GB 156.3MB/s
@@ -145,6 +149,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("repo_id", help="HuggingFace repo (e.g. meta-llama/Llama-3-8B)")
     parser.add_argument("--include", help="File pattern to include (e.g. '*Q4_K_M*')")
+    parser.add_argument(
+        "--revision",
+        default=None,
+        help="Pin the download to a specific HF git ref: branch, tag, or commit "
+             "SHA (e.g. 'main', 'v0.1.0', or a 40-hex commit). Unpinned downloads "
+             "track the repo default branch, which is supply-chain malleable; "
+             "pin to a fixed revision for reproducible/auditable model pulls.",
+    )
     args = parser.parse_args()
 
     # Disable HF progress bars (we provide our own)
@@ -168,10 +180,12 @@ def main():
     }
     if args.include:
         kwargs["allow_patterns"] = [args.include]
+    if args.revision:
+        kwargs["revision"] = args.revision
 
-    print(f"START {args.repo_id}", flush=True)
+    print(f"START {args.repo_id}" + (f"@{args.revision}" if args.revision else ""), flush=True)
     try:
-        path = snapshot_download(**kwargs)
+        path = snapshot_download(**kwargs)  # nosec B615 # dynamic kwargs; --revision pin supported above (Phase 4iii)
         print(f"DONE {path}", flush=True)
     except Exception as e:
         print(f"ERROR {e}", file=sys.stderr, flush=True)

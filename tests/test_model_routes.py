@@ -688,6 +688,7 @@ def test_lmstudio_error_for_bare_host_port_probes_v1_models(monkeypatch):
 class TestDockerLoopbackRewrite:
     def test_rewrites_loopback_when_in_docker(self, monkeypatch):
         monkeypatch.setattr(model_routes, "_docker_host_gateway_reachable", lambda: True)
+        monkeypatch.setattr(model_routes, "_container_loopback_reachable", lambda _url: False)
         assert (model_routes._rewrite_loopback_for_docker("http://localhost:1234/v1")
                 == "http://host.docker.internal:1234/v1")
         assert (model_routes._rewrite_loopback_for_docker("http://127.0.0.1:1234/v1")

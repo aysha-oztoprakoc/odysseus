@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from core.database import SessionLocal, ScheduledTask, TaskRun
-from core.middleware import INTERNAL_TOOL_USER
+from core.middleware import INTERNAL_TOOL_USER, is_loopback_bound
 from core.constants import internal_api_base
 from src.auth_helpers import get_current_user
 from src.constants import DATA_DIR, EMAIL_URGENCY_CACHE_DIR
@@ -434,8 +434,15 @@ def setup_task_routes(task_scheduler) -> APIRouter:
             from core.auth import AuthManager
             auth = AuthManager()
             if not auth.is_configured:
-                # Unconfigured single-user deploy: trust the local owner.
-                return True
+                # Unconfigured single-user deploy: trust the local owner only
+                # when the server is bound to loopback. A network-exposed
+                # instance with no admin account must fail CLOSED so shell /
+                # SSH actions can't be issued by anyone before setup. This is
+                # the `_is_admin` counterpart to `require_admin`'s loopback
+                # guard in core/middleware.py.
+                if is_loopback_bound():
+                    return True
+                return False
             return bool(auth.is_admin(user))
         except Exception:
             return False

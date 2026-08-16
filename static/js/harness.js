@@ -5,9 +5,21 @@
 
 const API_BASE = window.location.origin;
 let _open = false;
+let _wikiSearchController = null;
 
-async function _get(path) {
-  const res = await fetch(`${API_BASE}${path}`, { credentials: 'same-origin' });
+async function _get(path, signal) {
+  const res = await fetch(`${API_BASE}${path}`, { credentials: 'same-origin', signal });
+  if (!res.ok) throw new Error(`${path} -> ${res.status}`);
+  return res.json();
+}
+
+async function _put(path, body) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'PUT',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
   if (!res.ok) throw new Error(`${path} -> ${res.status}`);
   return res.json();
 }
@@ -110,53 +122,53 @@ async function _refreshAgents() {
   }
 }
 
+function _wikiResult(type, item) {
+  const row = document.createElement('button');
+  row.type = 'button';
+  row.className = 'wiki-result-item';
+  row.style.cssText = 'display:block;width:100%;cursor:pointer;padding:4px;border:0;border-radius:4px;background:none;color:inherit;text-align:left';
+  const label = document.createElement('strong');
+  label.textContent = `[${type === 'page' ? 'Page' : 'Memory'}: ${item.category || 'general'}] `;
+  const summary = document.createElement('span');
+  summary.textContent = type === 'page'
+    ? `${item.title || item.slug}${item.snippet ? ` — ${item.snippet}` : ''}`
+    : item.preview || item.snippet || item.uid;
+  row.append(label, summary);
+  row.addEventListener('click', () => openWikiEditor(type, type === 'page' ? item.slug : item.uid));
+  return row;
+}
+
+function _renderWikiResults(results, pages, memories) {
+  const rows = [...pages.map(item => _wikiResult('page', item)), ...memories.map(item => _wikiResult('memory', item))];
+  if (!rows.length) {
+    const empty = document.createElement('div');
+    empty.textContent = 'No results.';
+    results.replaceChildren(empty);
+    return;
+  }
+  results.replaceChildren(...rows);
+}
+
 async function _runWikiSearch(query) {
   const results = document.getElementById('harness-wiki-results');
   if (!results) return;
-  if (!query.trim()) { 
-    results.innerHTML = '<div style="opacity:0.6;">Loading recent...</div>';
-    try {
-      const [pages, memories] = await Promise.all([
-        _get('/api/reins/wiki/pages?limit=15'),
-        _get('/api/reins/wiki/memories?limit=15')
-      ]);
-      results.innerHTML = [
-        ...pages.map(p => `
-          <div class="wiki-result-item" style="cursor:pointer;padding:4px;border-radius:4px;" onclick="window.harnessModule.openWikiEditor('page', '${_escapeHtml(p.slug)}')">
-            <strong>[Page: ${_escapeHtml(p.category)}]</strong> ${_escapeHtml(p.title || p.slug)}
-          </div>`),
-        ...memories.map(m => `
-          <div class="wiki-result-item" style="cursor:pointer;padding:4px;border-radius:4px;" onclick="window.harnessModule.openWikiEditor('memory', '${_escapeHtml(m.uid)}')">
-            <strong>[Memory: ${_escapeHtml(m.category)}]</strong> <span style="opacity:0.8;">${_escapeHtml((m.text || '').substring(0, 60))}...</span>
-          </div>`)
-      ].join('<hr style="border-color:var(--border);opacity:0.3;margin:4px 0;">');
-    } catch(e) {
-      results.innerHTML = `<div style="color:var(--red);">Harness unreachable: ${_escapeHtml(e.message)}</div>`;
-    }
-    return; 
-  }
-  
-  results.innerHTML = '<div style="opacity:0.6;">Searching…</div>';
+  _wikiSearchController?.abort();
+  _wikiSearchController = new AbortController();
+  const { signal } = _wikiSearchController;
+  results.textContent = query.trim() ? 'Searching...' : 'Loading recent...';
   try {
-    const res = await _get(`/api/reins/wiki/search?q=${encodeURIComponent(query)}&limit=15`);
-    const pages = res.pages || [];
-    const memories = res.memories || [];
-    if (!pages.length && !memories.length) {
-      results.innerHTML = '<div style="opacity:0.6;">No results.</div>';
+    if (!query.trim()) {
+      const [pageResult, memoryResult] = await Promise.all([
+        _get('/api/reins/wiki/pages?limit=15', signal),
+        _get('/api/reins/wiki/memories?limit=15', signal),
+      ]);
+      _renderWikiResults(results, pageResult.items || [], memoryResult.items || []);
       return;
     }
-    results.innerHTML = [
-      ...pages.map(p => `
-        <div class="wiki-result-item" style="cursor:pointer;padding:4px;border-radius:4px;" onclick="window.harnessModule.openWikiEditor('page', '${_escapeHtml(p.slug)}')">
-          <strong>[Page: ${_escapeHtml(p.category)}]</strong> ${_escapeHtml(p.slug)}<br><span style="opacity:0.7;">${_escapeHtml(p.snippet)}</span>
-        </div>`),
-      ...memories.map(m => `
-        <div class="wiki-result-item" style="cursor:pointer;padding:4px;border-radius:4px;" onclick="window.harnessModule.openWikiEditor('memory', '${_escapeHtml(m.uid)}')">
-          <strong>[Memory: ${_escapeHtml(m.category)}]</strong> ${_escapeHtml(m.snippet)}
-        </div>`),
-    ].join('<hr style="border-color:var(--border);opacity:0.3;margin:4px 0;">');
-  } catch (e) {
-    results.innerHTML = `<div style="color:var(--red);">Harness unreachable: ${_escapeHtml(e.message)}</div>`;
+    const response = await _get(`/api/reins/wiki/search?q=${encodeURIComponent(query)}&limit=15`, signal);
+    _renderWikiResults(results, response.pages || [], response.memories || []);
+  } catch (error) {
+    if (error.name !== 'AbortError') results.textContent = `Harness unreachable: ${error.message}`;
   }
 }
 
@@ -175,7 +187,7 @@ async function openWikiEditor(type, id) {
   const delBtn = document.getElementById('harness-wiki-editor-delete');
   const saveBtn = document.getElementById('harness-wiki-editor-save');
   
-  saveBtn.textContent = 'Save';
+  saveBtn.textContent = type === 'memory' && id ? 'Create replacement' : 'Save';
   delBtn.style.display = id ? 'block' : 'none';
   
   if (type === 'memory') {
@@ -205,17 +217,11 @@ async function openWikiEditor(type, id) {
       catEl.value = page.category || 'general';
       contentEl.value = page.content || '';
     } else {
-      const mems = await _get(`/api/reins/wiki/memories`);
-      const m = mems.find(x => x.uid === id);
-      if (m) {
-        catEl.value = m.category || 'general';
-        contentEl.value = m.text || '';
-      } else {
-        // Fallback if memory isn't in recent
-        contentEl.value = 'Memory content could not be loaded from recent list.';
-      }
+      const memory = await _get(`/api/reins/wiki/memories/${encodeURIComponent(id)}`);
+      catEl.value = memory.category || 'general';
+      contentEl.value = memory.text || '';
     }
-    saveBtn.textContent = 'Save';
+    saveBtn.textContent = type === 'memory' ? 'Create replacement' : 'Save';
   } catch(e) {
     saveBtn.textContent = 'Error Loading';
     console.error(e);
@@ -237,9 +243,17 @@ async function _saveWikiEditor() {
   try {
     if (type === 'page') {
       const url = id ? `/api/reins/wiki/pages/${encodeURIComponent(id)}` : `/api/reins/wiki/pages`;
-      await _post(url, { title: title || slug || 'Untitled', content, category: cat || 'general' });
+      const body = { title: title || slug || 'Untitled', content, slug, category: cat || 'general' };
+      if (id) await _put(url, body);
+      else await _post(url, body);
     } else {
-      await _post(`/api/reins/wiki/memories`, { text: content, category: cat || 'general' });
+      const url = id
+        ? `/api/reins/wiki/memories/${encodeURIComponent(id)}/revisions`
+        : '/api/reins/wiki/memories';
+      const result = await _post(url, { text: content, category: cat || 'general' });
+      if (id && result.old_retained) {
+        window.alert('Replacement created. The old immutable fact remains until you delete it separately.');
+      }
     }
     document.getElementById('harness-wiki-editor-pane').style.display = 'none';
     _runWikiSearch(document.getElementById('harness-wiki-search-input').value);
@@ -386,20 +400,14 @@ async function _refreshSystem() {
   }
 }
 
-async function _revealSecret() {
-  const nameEl = document.getElementById('harness-sys-secret-name');
-  const pwdEl = document.getElementById('harness-sys-secret-pwd');
-  const valEl = document.getElementById('harness-sys-secret-val');
-  if (!nameEl || !pwdEl || !valEl) return;
-  const name = nameEl.value.trim();
-  const password = pwdEl.value.trim();
-  if (!name || !password) { valEl.textContent = 'Enter name and password.'; return; }
-  valEl.textContent = 'Decrypting...';
+async function _queueCli(path, output, body = null) {
+  if (!output) return;
+  output.textContent = 'Queueing operation...';
   try {
-    const res = await _post('/api/reins/system/secret', { name, password });
-    valEl.textContent = res.secret || 'Not found';
-  } catch (e) {
-    valEl.textContent = `Failed: ${e.message}`;
+    const result = body === null ? await _get(path) : await _post(path, body);
+    output.textContent = `Queued operation: ${result.operation_id}`;
+  } catch (error) {
+    output.textContent = `Queue failed: ${error.message}`;
   }
 }
 
@@ -451,8 +459,22 @@ function _wireOnce() {
   document.getElementById('harness-ds-export')?.addEventListener('click', _exportDataset);
   document.getElementById('harness-sys-directive-refresh')?.addEventListener('click', _refreshSystem);
   document.getElementById('harness-sys-paths-refresh')?.addEventListener('click', _refreshSystem);
-  document.getElementById('harness-sys-secret-btn')?.addEventListener('click', _revealSecret);
-
+  const cliOutput = document.getElementById('harness-cli-output');
+  for (const command of ['models', 'local', 'ody', 'bin']) {
+    document.getElementById(`harness-cli-${command}`)?.addEventListener(
+      'click',
+      () => _queueCli(`/api/reins/cli/${command}`, cliOutput),
+    );
+  }
+  document.getElementById('harness-cli-backup')?.addEventListener(
+    'click',
+    () => _queueCli('/api/reins/cli/backup', cliOutput, {}),
+  );
+  document.getElementById('harness-cli-digest-btn')?.addEventListener('click', () => {
+    const path = document.getElementById('harness-cli-digest-path')?.value.trim();
+    const output = document.getElementById('harness-cli-digest-out');
+    if (path) _queueCli('/api/reins/cli/digest', output, { path });
+  });
   const coordLoadBtn = document.getElementById('harness-coord-load');
   const coordUnloadBtn = document.getElementById('harness-coord-unload');
   const coordModelIn = document.getElementById('harness-coord-model');
